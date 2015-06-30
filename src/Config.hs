@@ -1,16 +1,18 @@
+{- LANGUAGE CPP -}
 module Config where
 
 import System.FilePath
 
-configFile = etcdir </> "config"
+configFile = etcdir </> "kvm-in-a-box.cfg"
+
 stateFile = varlibdir </> "state"
 
+rootRel root path = root </> makeRelative "/" path
 
--- varrundir = "/var/run/kib/"
-varrundir = "/tmp/kib/run"
+varrundir = "/var/run/kib/"
+varlibdir = "/var/lib/kib/"
+etcdir = "/etc"
 
--- varlibdir = "/var/lib/kib/"
-varlibdir = "/tmp/kib/lib"
-
--- etcdir = "/etc"
-etcdir = "/tmp/kib/etc"
+-- etcdir = "/tmp/kib/etc"
+--varrundir = "/tmp/kib/run"
+-- varlibdir = "/tmp/kib/lib"

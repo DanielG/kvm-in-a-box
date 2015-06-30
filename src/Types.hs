@@ -1,21 +1,39 @@
+{-# LANGUAGE TemplateHaskell #-}
 module Types where
 
 import Data.Map (Map)
 import qualified Data.Map as Map
-
 import Data.Set (Set)
 import qualified Data.Set as Set
-
+import Data.Word
 import Data.Char
 import Data.List
 import Data.List.Split
 
+import Control.DeepSeq
+import Control.Monad
+
+import GHC.Generics
+
+import FlagTH
+
+import MAC
+import IP
+
+data Config = Config {
+      cDomain    :: String,
+      cInterface :: String,
+      cAddress   :: Address
+    }
+
 type VmName = String
 newtype Interface = Iface String
 type GroupInterface = String
-type Address = (String, String, String)
-newtype MAC = MAC String
-    deriving (Eq, Ord, Show, Read)
+
+-- | CIDR prefix
+type Netmask = Int
+type Gateway = IP
+type Address = (IP, Netmask, Gateway)
 
 mkIface ifn =
     if all (\c -> isAlphaNum c || c == '-') ifn
@@ -24,35 +42,57 @@ mkIface ifn =
 
 unIface (Iface ifn) = ifn
 
-parseMac = readMac . splitOn ":"
- where
-   readMac mac@[a:b:c:d:e:f] = Right $ MAC $ intercalate ":" mac
-   readMac _ = Left "invalid MAC address"
+flagTH [d|
+ data VmSS = VmSS {
+       vVg :: String
+ -- TODO: lvm disk handling
+     } deriving (Eq, Ord, Show, Read, Generic)
+ |]
 
-unMac (MAC m) = m
+defVmSS = VmSS "vg0"
 
-data State = State {
-      sVms :: Map VmName (Vm, VmVolatileState, VmSolidState)
-    } deriving (Eq, Ord, Show, Read)
+flagTH [d|
+ data VmVS = VmVS {
+       vCpus      :: Int,
+       vMem       :: Int,
+       vArch      :: String,
+       vPublicIf  :: Bool,
+       vPrivateIf :: Bool,
+       vGroupIfs  :: Set GroupInterface
+     } deriving (Eq, Ord, Show, Read, Generic)
+ |]
 
-defState = State Map.empty
+defVmVS = VmVS 1 512 "x86_64" False False Set.empty
 
 data Vm = Vm {
       vName      :: VmName,
-      vCpus      :: Int,
-      vMem       :: Int,
-      vArch      :: String
-    } deriving (Eq, Ord, Show, Read)
+      vSS        :: VmSS,
+      vVS        :: VmVS
+    } deriving (Eq, Ord, Show, Read, Generic)
 
-data VmSolidState = VmSolidState {
--- TODO: lvm disk handling
-    } deriving (Eq, Ord, Show, Read)
+data VmFlags = VmFlags {
+      vSsFlag        :: VmSSFlags,
+      vVsFlag        :: VmVSFlags
+    }
 
-data VmVolatileState = VmVolatileState {
-      vUp        :: Maybe Bool,
-      vPublicIf  :: Maybe (Maybe MAC),
-      vPrivateIf :: Maybe (Maybe MAC),
-      vGroupIfs  :: Maybe (Set GroupInterface)
-    } deriving (Eq, Ord, Show, Read)
+combineVmFlags (VmFlags a b) (VmFlags a' b') =
+    VmFlags (combineVmSSFlags a a') (combineVmVSFlags b b')
 
-defVmVolatileState = VmVolatileState (Just True) (Just Nothing) (Just Nothing) (Just Set.empty)
+unVmFlags name (VmFlags a b) =
+    Vm name (unVmSSFlags a) (unVmVSFlags b)
+
+mkVmFlags Vm {..} = VmFlags (mkVmSSFlags vSS) (mkVmVSFlags vVS)
+
+defVmFlags = mkVmFlags $ Vm (error "defVmFlags: undefined") defVmSS defVmVS
+
+data State = State {
+      sVms :: Map VmName Vm,
+      sNet :: Map VmName (MAC, IP)
+    } deriving (Eq, Ord, Show, Read, Generic)
+
+defState = State Map.empty Map.empty
+
+instance NFData State
+instance NFData Vm
+instance NFData VmSS
+instance NFData VmVS

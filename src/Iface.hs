@@ -1,49 +1,63 @@
-module Iface (publicInterfaceResource) where
+module Iface (interfaceResource) where
 
 import Control.Monad
+import Control.Applicative
 import Data.Char
 import Data.Bool
 import Data.Maybe
 import System.Directory
 import System.Process
 import System.FilePath
+import System.Exit
 
 import Types
 import Resource
 import Utils
 import Config
+import IP
 
-publicInterfaceResource :: Interface -> Address -> [VmName] -> Resource
-publicInterfaceResource (unIface -> upstream) addr vms = ManyResources $ [
+interfaceResource :: Interface -> Address -> [VmName] -> Resource
+interfaceResource (unIface -> ifn) addr vms = ManyResources $ [
     FileResource {
       rNormalize = unlines . concatMap ifupdownNormalize . lines,
-      rPath = etcdir </> "intefaces.d/kipubr",
-      rContent = br upstream ifn vms (net addr)
+      rPath = etcdir </> "network/interfaces.d/"++ifn,
+      rContent = const $ br ifn vms (net addr)
     } ] ++ map ifaceRes vms
 
  where
-   ifn = "kipubr"
    ifpf v = ifn ++ "-" ++ v
 
    ifaceRes vm = IOResource {
-      rCheck = bool (const Nothing) Just <$> ifexists i <*> ifstate i,
+      rUpdateMsg = \case
+        Nothing -> "interface for VM '"++vm++"' doesn't exist, configuring"
+        Just (IfState "down") -> "interface for VM '"++vm++"' down, upping",
+
+      rCheck = do
+        e <- ifexists i
+        if e
+          then Just <$> ifstate i
+          else return Nothing,
+
       rNeedsUpdate = (/=Just (IfState "up")),
       rUpdate = \mu -> do
-          when (isNothing mu) $ pro $ tap "add" i usr
-          pro $ setIfstate i (IfState "up")
+          when (isNothing mu) $ do
+            ExitSuccess <- pro $ tapAdd i usr
+            return ()
+          ExitSuccess <- pro $ setIfstate i (IfState "up")
+          return ()
     }
       where
         i = mkIface $ ifpf vm
         usr = usrpf vm
 
-net (addr, nmask, gw) = [
+net (showIP -> addr, show -> nmask, showIP -> gw) = [
   "address        " ++ addr,
   "netmask        " ++ nmask,
   "gateway        " ++ gw
  ]
 
-br upstream ifn vms lines = iface ifn $ [
-  "bridge_ports   " ++ unwords (upstream:(map ifpf vms)),
+br ifn vms lines = iface ifn $ [
+  "bridge_ports   " ++ unwords (map ifpf vms),
   "bridge_stp     off",
   "bridge_maxwait 0",
   "bridge_fd      0"
@@ -59,11 +73,12 @@ iface name lines = unlines $ [
 
 downstreamIface ifpf vm = [
   "",
-  "pre-up" ++ unwords (tap "add" (ifpf vm) (usrpf vm)),
-  "pre-up" ++ unwords (setIfstate (ifpf vm) (IfState "up")),
-  "post-down" ++ unwords (setIfstate (ifpf vm) (IfState "down")),
-  "post-down"  ++ unwords (tap "del" (ifpf vm) (usrpf vm)),
-  ""
+  "pre-up " ++ unwords (tapAdd (ifpf vm) (usrpf vm)),
+  "pre-up " ++ unwords (setIfstate (ifpf vm) (IfState "up")),
+-- TODO: set static arp entry and filter everything else using arptables
+--  "pre-up" ++ unwords (arp (ifpf vm) mac),
+  "post-down " ++ unwords (setIfstate (ifpf vm) (IfState "down")),
+  "post-down " ++ unwords (tapDel (ifpf vm))
  ]
 
 usrpf u = "kib-" ++ u
@@ -76,8 +91,14 @@ isUp _ = False
 
 ifexists (unIface -> ifname) = doesDirectoryExist $ "/sys/class/net/" ++ ifname
 
-tap mod (unIface -> ifname) owner =
-    ["ip", "tuntap", mod, "dev", ifname, "mode", "tap", "user", owner]
+tapAdd (unIface -> ifname) owner =
+    ["ip", "tuntap", "add", "dev", ifname, "mode", "tap", "user", owner]
+
+tapDel (unIface -> ifname) =
+    ["ip", "tuntap", "del", "dev"]
+
+arp (unIface -> ifname) ip mac =
+    ["arp", "-i", ifname, "-s", ip, mac]
 
 ifstate :: Interface -> IO IfState
 ifstate (unIface -> ifname) = do

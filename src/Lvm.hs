@@ -1,5 +1,6 @@
 module Lvm where
 
-import System.Process
+import Utils
 
-lvcreate mb vm vg = callProcess "lvcreate" [ "-L", mb ++ "M", "-n", vm, vg ]
+lvcreate mb vm vg =
+    callProcess Nothing "lvcreate" [ "-L", mb ++ "M", "-n", vm, vg ]
