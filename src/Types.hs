@@ -9,6 +9,7 @@ import Data.Word
 import Data.Char
 import Data.List
 import Data.List.Split
+import Data.Aeson.TH
 
 import Control.DeepSeq
 import Control.Monad
@@ -56,13 +57,14 @@ flagTH [d|
        vCpus      :: Int,
        vMem       :: Int,
        vArch      :: String,
+       vUserIf    :: Bool,
        vPublicIf  :: Bool,
        vPrivateIf :: Bool,
        vGroupIfs  :: Set GroupInterface
      } deriving (Eq, Ord, Show, Read, Generic)
  |]
 
-defVmVS = VmVS 1 512 "x86_64" False False Set.empty
+defVmVS = VmVS 1 512 "x86_64" False False False Set.empty
 
 data Vm = Vm {
       vName      :: VmName,
@@ -96,3 +98,10 @@ instance NFData State
 instance NFData Vm
 instance NFData VmSS
 instance NFData VmVS
+
+deriveJSON defaultOptions ''State
+deriveJSON defaultOptions ''IP
+deriveJSON defaultOptions ''MAC
+deriveJSON defaultOptions ''Vm
+deriveJSON defaultOptions ''VmSS
+deriveJSON defaultOptions ''VmVS

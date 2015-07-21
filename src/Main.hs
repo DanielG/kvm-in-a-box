@@ -116,49 +116,37 @@ ensure cfg@Config {..} Options {..} vms = do
        [vmDnsDhcpResource cfg, vmHostLeaseResource cAddress vmns]
    dirsR = ManyResources $ map (qemuRunDirsResource varrundir) vmns
 
-dropPriviledges user = do
-  setCurrentDirectory "/"
-  UserEntry {userID, userGroupID } <- getUserEntryForName $ user
-  setGroupID userGroupID
-  setUserID userID
-
 setup :: Config -> Options -> State -> IO State
 setup cfg opts s = do
     ensureResource (oRoot opts) sshdResource
     return s
 
 commands :: Parser (Config -> Options -> State -> IO State)
-commands = subparser $
-  command "list" $$ withInfo "Print names of all VMs" $$
-      pure list   <<>>
+commands = subparser $ mconcat
+  [ command "list" $ withInfo "Print names of all VMs" $
+      pure list
 
-  command "info" $$ withInfo "Print names of all VMs" $$
-      infoCmd <$> strArgument (metavar "NAME")  <<>>
+  , command "info" $ withInfo "Print names of all VMs" $
+      infoCmd <$> strArgument (metavar "NAME")
 
-  command "create" $$ withInfo "Create a new VM" $$
-      create <$> strArgument (metavar "name") <*> vmP   <<>>
+  , command "create" $ withInfo "Create a new VM" $
+      create <$> strArgument (metavar "name") <*> vmP
 
-  command "destroy" $$ withInfo "Destroy an existing VM" $$
-      destroy <$> strArgument (metavar "NAME")   <<>>
+  , command "destroy" $ withInfo "Destroy an existing VM" $
+      destroy <$> strArgument (metavar "NAME")
 
-  command "change" $$ withInfo "Change an existing VM" $$
-      change <$> strArgument (metavar "NAME") <*> vmP   <<>>
+  , command "change" $ withInfo "Change an existing VM" $
+      change <$> strArgument (metavar "NAME") <*> vmP
 
-  command "start" $$ withInfo "Start an existing VM" $$
-      start <$> strArgument (metavar "NAME")   <<>>
+  , command "start" $ withInfo "Start an existing VM" $
+      start <$> strArgument (metavar "NAME")
 
-  command "stop" $$ withInfo "Stop an existing VM" $$
-      stop <$> strArgument (metavar "NAME")   <<>>
+  , command "stop" $ withInfo "Stop an existing VM" $
+      stop <$> strArgument (metavar "NAME")
 
-  command "setup" $$ withInfo "Perform initial envirnment configuration" $$
+  , command "setup" $ withInfo "Perform initial envirnment configuration" $
       pure setup
-
- where
-   infixr 0 <<>>
-   infixr 1 $$
-
-   (<<>>) = (<>)
-   ($$) = ($)
+  ]
 
 withInfo :: String -> Parser a -> ParserInfo a
 withInfo desc opts = info opts $ progDesc desc

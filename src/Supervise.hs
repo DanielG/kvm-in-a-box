@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 import System.IO
 import System.Exit
 import System.Process
@@ -11,7 +12,10 @@ import Control.Concurrent
 import Control.Concurrent.MVar
 
 import Data.Monoid
-import Text.JSON
+import qualified Data.HashMap.Strict as HMap
+import Data.Aeson
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 
 slog msg = hPutStrLn stderr msg
 
@@ -91,14 +95,14 @@ swallow a = catch a (\(SomeException _) -> return ())
 data QMPRes = Greeting
             | Return
             | Event String
-            | Other JSValue
+            | Other Value
               deriving (Eq)
 
 parseQmp :: String -> Either String QMPRes
-parseQmp = fmap qmpResponse . resultToEither . decode
+parseQmp = fmap qmpResponse . eitherDecodeStrict . T.encodeUtf8 . T.pack
 
-qmpResponse (JSObject m)
-    | Just _ <- lookup "QMP" $ fromJSObject m = Greeting
-    | Just _ <- lookup "return" $ fromJSObject m = Return
-    | Just (JSString (fromJSString -> ev)) <- lookup "event" $ fromJSObject m = Event ev
-    | otherwise = Other (JSObject m)
+qmpResponse (Object (HMap.toList -> m))
+    | Just _ <- lookup "QMP" m = Greeting
+    | Just _ <- lookup "return" m = Return
+    | Just (String ev) <- lookup "event" m = Event $ T.unpack ev
+    | otherwise = Other (Object $ HMap.fromList m)

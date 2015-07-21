@@ -14,8 +14,8 @@ import Resource
 
 qemuRunDirsResource vardir vmn = DirectoryResource {
                                    rPath  = vardir </> vmn,
-                                   rOwner = "kib-" ++ vmn,
-                                   rGroup = "kib"
+                                   rPerms = ("kib-" ++ vmn, "kib"),
+                                   rOwner = OwnerKib
                                  }
 
 qemu vardir Vm { vName, vSS = VmSS {..}, vVS = VmVS {..} } mac = concat $ [
@@ -31,15 +31,15 @@ qemu vardir Vm { vName, vSS = VmSS {..}, vVS = VmVS {..} } mac = concat $ [
   smp vCpus,
   mem vMem,
   disk 0 ("/dev" </> vVg </> vName) Nothing,
-  vPublicIf  ==> net "virtio" ("kipubr-"++vName) 0 mac
---  vPrivateIf ==> net 0 vMac "virtio" ("kiprbr-"++vName),
+  ["-net", "none"],
+  vUserIf    ==> userNet "virtio" 2 [],
+  vPublicIf  ==> net ("kipubr-"++vName) "virtio" 0 mac
+--  vPrivateIf ==> net ("kiprbr-"++vName) "virtio" 0 prMac,
 -- TODO: Group interfaces
  ]
-
  where
    True  ==> f = f
    False ==> _ = []
-
 
 smp :: Int -> [String]
 smp n = [ "-smp", show n ]
@@ -57,16 +57,23 @@ disk i file mfmt =
     , "-device", "virtio-scsi-pci"
     ]
 
-net model ifname vlan mac =
-    [ "-net nic," ++ opts [ ("vlan", show vlan)
-                          , ("macaddr", showMAC mac)
-                          , ("model",  model)
-                          ]
-    , "-net tap," ++ opts [ ("vlan", show vlan)
-                          , ("ifname", ifname)
-                          , ("script", "no")
-                          , ("downscript", "no")
-                          ]
+net ifname model vlan mac =
+    [ "-net", "nic," ++ opts [ ("vlan",    show vlan)
+                             , ("macaddr", showMAC mac)
+                             , ("model",   model)
+                             ]
+    , "-net", "tap," ++ opts [ ("vlan",   show vlan)
+                             , ("ifname", ifname)
+                             , ("script", "no")
+                             , ("downscript", "no")
+                             ]
     ]
+
+userNet model vlan adopts =
+  [ "-net", "nic," ++ opts [ ("vlan",  show vlan)
+                           , ("model", model)
+                           ]
+  , "-net", "user," ++ opts (("vlan", show vlan):adopts)
+  ]
 
 opts = intercalate "," . map (\(k,v) -> k++"="++v)

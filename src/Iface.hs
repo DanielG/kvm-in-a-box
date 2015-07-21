@@ -18,10 +18,11 @@ import IP
 
 interfaceResource :: Interface -> Address -> [VmName] -> Resource
 interfaceResource (unIface -> ifn) addr vms = ManyResources $ [
-    FileResource {
-      rNormalize = unlines . concatMap ifupdownNormalize . lines,
+    SimpleFileResource {
       rPath = etcdir </> "network/interfaces.d/"++ifn,
-      rContent = const $ br ifn vms (net addr)
+      rNormalize = unlines . concatMap ifupdownNormalize . lines,
+      rContent = br ifn vms (net addr),
+      rOwner = OwnerKib
     } ] ++ map ifaceRes vms
 
  where

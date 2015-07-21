@@ -1,4 +1,4 @@
-{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE TemplateHaskell, ExistentialQuantification #-}
 module Resource where
 
 import Control.Monad
@@ -17,25 +17,52 @@ import System.FilePath
 import Log
 import Utils
 import Config
+import Types
+
+data ResourceOwner =
+    OwnerVm VmName
+  | OwnerKib
+  | OwnerSystem
+
+type Owned a = (ResourceOwner, a)
 
 data Resource =
-    FileResource {
+     SimpleFileResource {
       rPath      :: FilePath,
+      rOwner     :: ResourceOwner,
       rNormalize :: String -> String,
-      rContent   :: String -> String
+      rContent   :: String
     }
-  | MultiFileResource {
+
+  | forall a. FileResource {
+      rPath        :: FilePath,
       rNormalize   :: String -> String,
-      rFileContent :: [(FilePath, [(FilePath, String)] -> String -> String )]
+      rParse       :: String -> [Owned a],
+      rUnparse     :: [a] -> String,
+      rContentFunc :: [Owned a] -> [Owned a]
     }
+
+  | forall a. MultiFileResource {
+      rNormalize   :: String -> String,
+      rParse       :: String -> [(ResourceOwner, a)],
+      rUnparse     :: [a] -> String,
+      rFileContent :: [
+       ( FilePath,
+         [(FilePath, String)] -> [Owned a] -> [Owned a]
+       )
+      ]
+    }
+
   | DirectoryResource {
       rPath      :: FilePath,
-      rOwner     :: String,
-      rGroup     :: String
+      rPerms     :: (String, String),
+      rOwner     :: ResourceOwner
     }
+
   | SymlinkResource {
       rPath      :: FilePath,
-      rTarget    :: FilePath
+      rTarget    :: FilePath,
+      rOwner     :: ResourceOwner
     }
   | forall a. Show a => IOResource {
       rCheck       :: IO a,
@@ -47,7 +74,7 @@ data Resource =
       rOthers :: [Resource]
     }
 
-ensureResource root (DirectoryResource (rootRel root -> path) owner grp) = do
+ensureResource root (DirectoryResource (rootRel root -> path) (owner, grp) _row) = do
   e <- doesDirectoryExist path
   uid <- userID <$> getUserEntryForName owner
   gid <- groupID <$> getGroupEntryForName grp
@@ -70,23 +97,27 @@ ensureResource root (DirectoryResource (rootRel root -> path) owner grp) = do
        createDirectoryIfMissing True path
        setOwnerAndGroup path uid gid
 
-ensureResource root (FileResource path norm cf) = do
-  ensureResource root $ MultiFileResource norm [(path, \_ -> cf)]
+ensureResource root (FileResource path norm parse unparse content) = do
+  ensureResource root $
+    MultiFileResource norm parse unparse [(path, const content)]
 
-ensureResource r (MultiFileResource norm (map (first (rootRel r)) -> fs)) = do
-  let paths = map fst fs
-  mapM_ (createDirectoryIfMissing True . takeDirectory)  paths
+ensureResource r (MultiFileResource {..}) = do
+  let norm  = rNormalize
+  let fs    = map (first $ rootRel r) rFileContent
+      paths = map fst fs
+
+  mapM_ (createDirectoryIfMissing True . takeDirectory) paths
   mfs <- mapM readFileMaybe paths
   let ctx = [ (p, f) | (p, Just f) <- paths `zip` mfs ]
 
-  forM_ (fs `zip` mfs) $ \((path,(cf :: [(FilePath, String)] -> String -> String)), mf) ->
+  forM_ (fs `zip` mfs) $ \((path,cf), mf) ->
     case mf of
       Nothing -> do
               klog $ "resource '"++path++"' missing, creating."
-              writeFile' path (cf ctx "")
-      Just (force -> f) | norm f /= norm (cf ctx f) -> do
+              writeFile' path $ rUnparse $ map snd $ cf ctx []
+      Just (force -> f) | norm f /= norm (rUnparse $ map snd $ cf ctx $ rParse f) -> do
               klog $ "resource '"++path++"' changed, rewriting."
-              writeFile' path (cf ctx f)
+              writeFile' path $ rUnparse $ map snd $ cf ctx $ rParse f
       _ -> return ()
 
 

@@ -16,17 +16,24 @@ sshdResource :: Resource
 sshdResource = FileResource {
     rNormalize = \str -> concatMap unparse $ filter isOurs $ parse str,
     rPath = etcdir </> "ssh/sshd_config",
-    rContent = \str -> concatMap unparse
-                     $ nubBy (both isOurs)
-                     $ (++[cfg])
-                     $ map replaceOurs
-                     $ parse str
+    rParse = map markOurs . parse,
+    rUnparse = concatMap unparse,
+    rContentFunc = addOrReplace (isOurs . snd) (OwnerKib, cfg)
   }
+-- [Owned SshCfgDir] -> [Owned SshCfgDir]
+
  where
    both f a b = f a && f b
    isOurs x = headMatch (SshCfgDir "Match" ["Group", "kib"] []) x
-   replaceOurs x | isOurs x = cfg
-                 | otherwise = x
+   markOurs x | isOurs x = (OwnerKib, x)
+              | otherwise = (OwnerSystem, x)
+
+   replace p x' x
+       | p x = x'
+       | otherwise = x
+
+   addOrReplace :: (a -> Bool) -> a -> [a] -> [a]
+   addOrReplace p x l = nubBy (both p) $ map (replace p x) l ++ [x]
 
 
 

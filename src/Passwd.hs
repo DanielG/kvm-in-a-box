@@ -49,34 +49,55 @@ data GroupEntry = GroupEntry {
 passwdResource :: [VmName] -> PX.GroupEntry -> Resource
 passwdResource vmns kibGrp = ManyResources [
   FileResource {
+    rPath = etcdir </> "passwd",
     rNormalize =
         \str -> unparsePwd $ filter (isKibUser peLoginName) $ parsePwd str,
-    rPath = etcdir </> "passwd",
-    rContent = passwdDb vmns kibGrp
+
+    rParse = map markPwd . parsePwd,
+    rUnparse = unparsePwd,
+
+    rContentFunc = map markPwd . passwdDb vmns kibGrp . map snd
   },
   FileResource {
+    rPath = etcdir </> "shadow",
     rNormalize =
         \str -> unparseShd $ filter (isKibUser seLoginName) $ parseShd str,
-    rPath = etcdir </> "shadow",
-    rContent = shadowDb vmns
+    rParse = map markShd . parseShd,
+    rUnparse = unparseShd,
+
+    rContentFunc = map markShd . shadowDb vmns . map snd
   },
   FileResource {
+    rPath = etcdir </> "group",
     -- TODO: filter out kib users from group members
     rNormalize =
         \str -> unparseGrp $ filter ((=="kvm") . geName) $ parseGrp str,
-    rPath = etcdir </> "group",
-    rContent = groupDb vmns
+    rParse = map markGrp . parseGrp,
+    rUnparse = unparseGrp,
+
+    rContentFunc = map markGrp . groupDb vmns . map snd
   }
  ]
+
+markPwd x
+    | isKibUser peLoginName x = (OwnerKib, x)
+    | otherwise = (OwnerSystem, x)
+
+markShd x
+    | isKibUser seLoginName x = (OwnerKib, x)
+    | otherwise = (OwnerSystem, x)
+
+markGrp x
+    | geName x == "kvm" = (OwnerKib, x)
+    | otherwise = (OwnerSystem, x)
+
 
 isKibUser u = ("kib-" `isPrefixOf`) . u
 
 unUid (CUid x) = x
 unGid (CGid x) = x
 
-passwdDb vmns kibGrp str = let
-    db = parsePwd str
-
+passwdDb vmns kibGrp db = let
     nextUid' :: UserID
     nextUid' = (+1) $ foldr max 4999
                     $ filter (< 65534)
@@ -97,7 +118,7 @@ passwdDb vmns kibGrp str = let
     oldUsers = map (uncurry passwd) kibs
 
   in
-    unparsePwd $ (others ++ oldUsers ++ newUsers)
+    (others ++ oldUsers ++ newUsers)
  where
    kibUser e@(peLoginName -> u)
        | ('k':'i':'b':'-':vmn) <- u = Right (vmn, peUID e)
@@ -117,11 +138,10 @@ passwdDb vmns kibGrp str = let
        }
 
 
-shadowDb vmns str = let
-    db = parseShd str
+shadowDb vmns db = let
     (others, _kib) = partitionEithers $ map kibUser db
   in
-    unparseShd $ others ++ map shadow vmns
+    others ++ map shadow vmns
  where
    kibUser e@(seLoginName -> u)
        | ('k':'i':'b':'-':vmn) <- u = Right vmn
@@ -141,10 +161,10 @@ shadowDb vmns str = let
            seReserved          = ""
        }
 
-groupDb vmns str = let
-    ([kvm], others) = partition ((=="kvm") . geName) $ parseGrp str
+groupDb vmns db = let
+    ([kvm], others) = partition ((=="kvm") . geName) db
   in
-    unparseGrp $ others ++ [kvm { geUserList = nub $ geUserList kvm ++ map ("kib-"++) vmns }]
+    others ++ [kvm { geUserList = nub $ geUserList kvm ++ map ("kib-"++) vmns }]
 
 unparse :: (a -> String) -> [a] -> String
 unparse fn = unlines . map fn

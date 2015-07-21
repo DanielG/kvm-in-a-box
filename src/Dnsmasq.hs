@@ -21,10 +21,11 @@ import IP
 
 vmDnsDhcpResource :: Config -> Resource
 vmDnsDhcpResource cfg =
-  FileResource {
-    rNormalize = id,
+  SimpleFileResource {
     rPath = etcdir </> "dnsmasq.d/kib",
-    rContent = const $
+    rOwner = OwnerKib,
+    rNormalize = id,
+    rContent =
        unlines [ "domain="++cDomain cfg
                , "dhcp-range=::,static" ]
  }
@@ -32,10 +33,14 @@ vmDnsDhcpResource cfg =
 vmHostLeaseResource :: Address -> [VmName] -> Resource
 vmHostLeaseResource addr vmns =
   FileResource {
-    rNormalize = unparse . sort . parse,
     rPath = kibHostsFile,
-    rContent = unparse . allocate addr vmns . parse
+    rNormalize = unparse . sort . parse,
+    rParse = addOwner . parse,
+    rUnparse = unparse,
+    rContentFunc = addOwner . allocate addr vmns . map snd
  }
+
+addOwner = map (\x@(vmn,_) -> (OwnerVm vmn, x))
 
 kibHostsFile = etcdir </> "dnsmasq.kib.hosts"
 
@@ -46,7 +51,8 @@ allocateHosts root addr vmns = do
 
 allocate :: Address -> [VmName] -> [(VmName, (MAC, IP))] -> [(VmName, (MAC, IP))]
 allocate (ip, nm, _gw) newHosts oldHosts = let
-    oldHostsMap = Map.fromList oldHosts
+--    oldHostsMap = Map.fromList oldHosts
+--    notNeededAnymore = foldr Map.delete oldHostsMap newHosts
 
     maxMac = maximum $ nullMAC : map (fst . snd) oldHosts
     maxIp  = maximum $ ip : map (snd . snd) oldHosts
@@ -54,7 +60,6 @@ allocate (ip, nm, _gw) newHosts oldHosts = let
     macs = drop 1 $ enumerateMACs maxMac
     ips  = drop 1 $ enumerateIPs maxIp nm
 
---    notNeededAnymore = foldr Map.delete oldHostsMap newHosts
 
     thingsIHaveToAllocateNow = newHosts \\ map fst oldHosts
   in

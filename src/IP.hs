@@ -54,20 +54,6 @@ enumerateIPs (IP bs) prefixBits = let
   in
     map (IP . splitWord) netIps
 
-    -- ( (fill32 $ bin (net :: Word32), "net")
-    -- , (fill32 $ bin host, "host")
-    -- , (fill32 $ bin (netmask :: Word32), "netmask")
-    -- , (fill32 $ bin (hostmask :: Word32), "hostmask")
-    -- , subnetSize
-    -- , (subnetSize - host)
-    -- , map (second $ IP . splitWord) netIps
-    -- )
-
--- fill32 str = replicate (32 - length str) '0' ++ str
-
--- hex = flip showHex ""
--- bin = flip (showIntAtBase 2 (\case 0 -> '0'; 1 -> '1')) ""
-
 isProper hostmask ip = let
     hostid = ip .&. hostmask
   in hostid /= 0 && hostid /= hostmask

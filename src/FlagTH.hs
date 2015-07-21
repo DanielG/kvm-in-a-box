@@ -75,7 +75,6 @@ flagTH' (DataD ctx name@(Name (OccName n) _) tyvars cons dervs ) = [
      in
        Clause [p] (NormalB e) []
 
-
    mplusE (a,a') = InfixE (Just $ VarE a) (VarE 'mplus) (Just $ VarE a')
 
    combineE :: Name -> [Name] -> [Name] -> Exp

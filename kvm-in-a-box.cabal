@@ -39,6 +39,9 @@ executable kib
                      , temporary
                      , parsec
                      , template-haskell
+                     , aeson
+                     , unordered-containers
+                     , text
 
   hs-source-dirs:      src
   default-language:    Haskell2010
@@ -53,8 +56,10 @@ executable kib-supervise
                      , process >= 1.1.0.0
                      , unix
                      , filepath
-                     , json
                      , containers
+                     , aeson
+                     , unordered-containers
+                     , text
 
   hs-source-dirs:      src
   default-language:    Haskell2010

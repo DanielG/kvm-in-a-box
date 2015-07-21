@@ -13,10 +13,11 @@ vmInitResource :: VmName -> [String] -> IO Resource
 vmInitResource vmn (cmd:args) = do
   Just kibSupervise <- findExecutable "kib-supervise"
   Just cmd' <- findExecutable cmd
-  return $ FileResource {
-    rNormalize = id,
+  return $ SimpleFileResource {
     rPath = etcdir </> "systemd/system/kib-" <> vmn <.> "service",
-    rContent = const $ service vmn $ kibSupervise:("kib-"++vmn):cmd':args
+    rOwner = OwnerVm vmn,
+    rNormalize = id,
+    rContent = service vmn $ kibSupervise:("kib-"++vmn):cmd':args
  }
 
 service vmn (cmd:args) = "\

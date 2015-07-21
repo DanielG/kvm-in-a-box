@@ -12,7 +12,3 @@ rootRel root path = root </> makeRelative "/" path
 varrundir = "/var/run/kib/"
 varlibdir = "/var/lib/kib/"
 etcdir = "/etc"
-
--- etcdir = "/tmp/kib/etc"
---varrundir = "/tmp/kib/run"
--- varlibdir = "/tmp/kib/lib"

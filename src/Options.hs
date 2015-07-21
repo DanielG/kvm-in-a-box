@@ -45,6 +45,10 @@ vmVSP = VmVSFlags
             <<>> help "Which CPU architecture the VM should use"
 
      <*> Just <$$> switch $$
+                 long "user"
+            <<>> help "Enable the QEMU 'user' network interface"
+
+     <*> Just <$$> switch $$
                  long "public"
             <<>> help "Enable the public network interface"
 
@@ -60,7 +64,7 @@ vmVSP = VmVSFlags
 
 optionsP :: Parser Options
 optionsP = Options
-       <$> strOption $$
+       <$> fromMaybe "/" <$$> optional $$ strOption $$
              long "root"
         <<>> metavar "ROOT"
         <<>> help "Use this directory instead of '/'"
