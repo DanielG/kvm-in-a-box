@@ -12,11 +12,12 @@ import Types
 import MAC
 import Resource
 
-qemuRunDirsResource vardir vmn = DirectoryResource {
-                                   rPath  = vardir </> vmn,
-                                   rPerms = ("kib-" ++ vmn, "kib"),
-                                   rOwner = OwnerKib
-                                 }
+qemuRunDirsResource vardir vmn =
+    DirectoryResource {
+        rPath  = vardir </> vmn,
+        rPerms = ("kib-" ++ vmn, "kib"),
+        rOwner = OwnerKib
+    }
 
 qemu vardir Vm { vName, vSS = VmSS {..}, vVS = VmVS {..} } mac = concat $ [
   [arch vArch],

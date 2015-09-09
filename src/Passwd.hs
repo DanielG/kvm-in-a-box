@@ -25,7 +25,7 @@ data PasswdEntry = PasswdEntry {
       peName      :: String,
       peHome      :: FilePath,
       peShell     :: String
-    }
+    } deriving (Show)
 
 data ShadowEntry = ShadowEntry {
       seLoginName         :: String,
@@ -37,14 +37,14 @@ data ShadowEntry = ShadowEntry {
       seInactivityPeriod  :: String,
       seExpirationDate    :: String,
       seReserved          :: String
-    }
+    } deriving (Show)
 
 data GroupEntry = GroupEntry {
       geName     :: String,
       gePassword :: String,
       geGID      :: String,
       geUserList :: [String]
-    }
+    } deriving (Show)
 
 passwdResource :: [VmName] -> PX.GroupEntry -> Resource
 passwdResource vmns kibGrp = ManyResources [
@@ -113,9 +113,14 @@ passwdDb vmns kibGrp db = let
     (others, kibs) = partitionEithers $ map kibUser db
 
     newVms = filter (isNothing . flip lookup kibs) vmns
+    oldVms = [ (vmn, uid)
+             | (vmn, uid) <- kibs
+             , vmn' <- vmns
+             , vmn == vmn'
+             ]
 
     newUsers = map (uncurry passwd) $ newVms `zip` [nextUid..]
-    oldUsers = map (uncurry passwd) kibs
+    oldUsers = map (uncurry passwd) oldVms
 
   in
     (others ++ oldUsers ++ newUsers)
@@ -134,9 +139,8 @@ passwdDb vmns kibGrp db = let
            peName = "",
            peHome = varlibdir </> vmn,
            -- TODO: make shell be socat wrapper
-           peShell = "/bin/false"
+           peShell = "/usr/sbin/kib-console"
        }
-
 
 shadowDb vmns db = let
     (others, _kib) = partitionEithers $ map kibUser db
@@ -164,7 +168,7 @@ shadowDb vmns db = let
 groupDb vmns db = let
     ([kvm], others) = partition ((=="kvm") . geName) db
   in
-    others ++ [kvm { geUserList = nub $ geUserList kvm ++ map ("kib-"++) vmns }]
+    others ++ [kvm { geUserList = map ("kib-"++) vmns }]
 
 unparse :: (a -> String) -> [a] -> String
 unparse fn = unlines . map fn

@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell, ExistentialQuantification #-}
+{-# LANGUAGE TemplateHaskell, ExistentialQuantification, RankNTypes #-}
 module Resource where
 
 import Control.Monad
@@ -6,6 +6,7 @@ import Control.DeepSeq
 import Control.Exception
 import Control.Applicative
 import Control.Arrow
+import Data.List
 import System.IO
 import System.Directory
 import System.Posix.Files
@@ -23,6 +24,10 @@ data ResourceOwner =
     OwnerVm VmName
   | OwnerKib
   | OwnerSystem
+    deriving (Eq, Show)
+
+isOwnerVm (OwnerVm _) = True
+isOwnerVm _ = False
 
 type Owned a = (ResourceOwner, a)
 
@@ -43,14 +48,12 @@ data Resource =
     }
 
   | forall a. MultiFileResource {
-      rNormalize   :: String -> String,
-      rParse       :: String -> [(ResourceOwner, a)],
-      rUnparse     :: [a] -> String,
-      rFileContent :: [
-       ( FilePath,
-         [(FilePath, String)] -> [Owned a] -> [Owned a]
-       )
-      ]
+      rNormalize    :: String -> String,
+      rParse        :: String -> [(ResourceOwner, a)],
+      rUnparse      :: [a] -> String,
+      rPrereqs      :: [FilePath],
+      rPaths        :: [FilePath],
+      rContentFuncs :: [ [(FilePath, String)] -> [Owned a] -> [Owned a] ]
     }
 
   | DirectoryResource {
@@ -97,29 +100,24 @@ ensureResource root (DirectoryResource (rootRel root -> path) (owner, grp) _row)
        createDirectoryIfMissing True path
        setOwnerAndGroup path uid gid
 
+ensureResource root (SimpleFileResource path owner norm content) = do
+  ensureResource root $
+    FileResource path norm (return . (,) owner) head (const [(owner, content)])
+
 ensureResource root (FileResource path norm parse unparse content) = do
   ensureResource root $
-    MultiFileResource norm parse unparse [(path, const content)]
+    MultiFileResource norm parse unparse [] [path] [const content]
 
-ensureResource r (MultiFileResource {..}) = do
-  let norm  = rNormalize
-  let fs    = map (first $ rootRel r) rFileContent
-      paths = map fst fs
-
-  mapM_ (createDirectoryIfMissing True . takeDirectory) paths
-  mfs <- mapM readFileMaybe paths
-  let ctx = [ (p, f) | (p, Just f) <- paths `zip` mfs ]
-
-  forM_ (fs `zip` mfs) $ \((path,cf), mf) ->
+ensureResource r res@MultiFileResource {rNormalize=norm} =
+  void $ withMultiFileResource r res $ \ctx parse unparse cf path mf ->
     case mf of
       Nothing -> do
               klog $ "resource '"++path++"' missing, creating."
-              writeFile' path $ rUnparse $ map snd $ cf ctx []
-      Just (force -> f) | norm f /= norm (rUnparse $ map snd $ cf ctx $ rParse f) -> do
+              writeFile' path $ unparse $ map snd $ cf ctx []
+      Just (force -> f) | norm f /= norm (unparse $ map snd $ cf ctx $ parse f) -> do
               klog $ "resource '"++path++"' changed, rewriting."
-              writeFile' path $ rUnparse $ map snd $ cf ctx $ rParse f
+              writeFile' path $ unparse $ map snd $ cf ctx $ parse f
       _ -> return ()
-
 
 
 -- ensureResource root SymlinkResource {..} = do
@@ -142,6 +140,59 @@ ensureResource _ IOResource {..} = do
     rUpdate a
 
 ensureResource root (ManyResources rs) = mapM_ (ensureResource root) rs
+
+
+resourcePaths (SimpleFileResource {rPath}) = [rPath]
+resourcePaths (FileResource {rPath}) = [rPath]
+resourcePaths (MultiFileResource {rPaths}) = rPaths
+resourcePaths (DirectoryResource {rPath}) = ["dir:" ++ rPath]
+resourcePaths (SymlinkResource {rPath}) = ["sym:" ++ rPath]
+resourcePaths (IOResource {}) = ["<IO resource>"]
+resourcePaths (ManyResources rs) = concatMap resourcePaths rs
+
+
+resourceOwners r (SimpleFileResource path owner norm content) = do
+  resourceOwners r $
+    FileResource path norm (return . (,) owner) head (const [(owner, content)])
+
+resourceOwners r (FileResource path norm parse unparse content) = do
+  resourceOwners r $
+    MultiFileResource norm parse unparse [] [path] [const content]
+
+resourceOwners r res@MultiFileResource {rNormalize=norm} = do
+  os <- withMultiFileResource r res $ \ctx parse unparse cf path mf -> return $
+    case mf of
+      Nothing -> []
+      Just f -> do
+        map fst $ parse f
+  return $ concat os
+
+resourceOwners r DirectoryResource {rOwner} = return [rOwner]
+resourceOwners r SymlinkResource {rOwner} = return [rOwner]
+resourceOwners r IOResource {} = return []
+resourceOwners r (ManyResources rs) = concat <$> mapM (resourceOwners r) rs
+
+
+
+withMultiFileResource :: FilePath -> Resource ->
+
+                         (forall a. [(FilePath, String)]
+                         -> (String -> [(ResourceOwner, a)])
+                         -> ([a] -> String)
+                         -> ([(FilePath, String)] -> [Owned a] -> [Owned a])
+                         -> FilePath
+                         -> Maybe String
+                         -> IO b)
+
+ -> IO [b]
+withMultiFileResource r MultiFileResource{..} fn = do
+  let paths = map (rootRel r) rPaths
+
+  mapM_ (createDirectoryIfMissing True . takeDirectory) paths
+  mfs <- mapM readFileMaybe paths
+  let ctx = [ (p, f) | (p, Just f) <- paths `zip` mfs ]
+
+  sequence $ zipWith5 (fn ctx) (repeat rParse) (repeat rUnparse) rContentFuncs paths mfs
 
 linkExists p =
   flip catch (\(SomeException _) -> return False) $ do

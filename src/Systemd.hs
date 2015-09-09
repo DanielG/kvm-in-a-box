@@ -28,7 +28,7 @@ service vmn (cmd:args) = "\
  \[Service]\n\
  \User=kib-"++vmn++"\n\
  \ExecStart="++cmd++" "++(intercalate " " $ map (("'"++) . (++"'")) args)++"\n\
- \Restart=always\n\
+ \Restart=on-abnormal\n\
  \\n\
  \[Install]\n\
  \WantedBy=WantedBy=multi-user.target\n"

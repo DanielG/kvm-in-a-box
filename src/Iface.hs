@@ -42,9 +42,9 @@ interfaceResource (unIface -> ifn) addr vms = ManyResources $ [
       rNeedsUpdate = (/=Just (IfState "up")),
       rUpdate = \mu -> do
           when (isNothing mu) $ do
-            ExitSuccess <- pro $ tapAdd i usr
+            pro $ tapAdd i usr
             return ()
-          ExitSuccess <- pro $ setIfstate i (IfState "up")
+          pro $ setIfstate i (IfState "up")
           return ()
     }
       where

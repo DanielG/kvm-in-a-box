@@ -11,12 +11,14 @@ import System.IO
 import Control.Monad
 import Control.DeepSeq
 import Control.Exception
+import Control.Concurrent
 import Data.Functor.Identity
 import qualified Data.Traversable as T
 import Data.List
 import Data.List.Split
 import Data.Maybe
 import Data.Char
+import Data.Monoid
 import qualified Data.Set as Set
 import Data.Set (Set)
 import qualified Data.Map as Map
@@ -38,6 +40,8 @@ import Ssh
 import Files
 import MAC
 import Dnsmasq
+import Udev
+import Log
 
 list :: Config -> Options -> State -> IO State
 list cfg opts s@State {..} = do
@@ -81,31 +85,28 @@ start vmn cfg opts s@State {..} = error "TODO: systemctl start ..."
 stop :: VmName -> Config -> Options -> State -> IO State
 stop = error "TODO: systemctl start ..."
 
-ensure cfg@Config {..} Options {..} vms = do
-    let root = oRoot
-    kibGrp <- getGroupEntryForName "kib"
-    hosts <- allocateHosts root cAddress vmns
-    print hosts
+console :: VmName -> Config -> Options -> State -> IO State
+console vmn cfg opts s@State {sVms=sVms0} = do
+  case Map.lookup vmn sVms0 of
+    Nothing -> error $ "VM '"++vmn++"' does not exist."
+    Just vm0 -> do
+      console' vmn
+      return s
 
-    swallow $ ensureResource root $ passwdR kibGrp
-    swallow $ ensureResource root $ pubIfR
-    swallow $ ensureResource root =<< systemdR hosts
-    swallow $ ensureResource root $ dnsmasqR
-    swallow $ ensureResource root dirsR
+console' vmn = do
+  hPutStrLn stderr "Type ^] to exit console."
+  pro [ "socat",  "STDIO,raw,echo=0,escape=0x1d",  "UNIX-CONNECT:" ++ (varrundir </> vmn </> "ttyS0.unix") ]
 
-    return $ Map.fromList hosts
 
+resources cfg@Config {..} Options {..} kibGrp hosts vms = do
+    systemdR <- mkSystemdR hosts
+    return $ ManyResources [ passwdR kibGrp, pubIfR, systemdR, dnsmasqR, dirsR
+                           , lvmOwnerResources $ Map.elems vms ]
  where
-   swallow ma = do
-     eexa <- try $ evaluate =<< ma
-     case eexa of
-       Left (SomeException ex) -> hPutStrLn stderr $ "ensure: " ++ show ex
-       Right a -> return a
-
    vmns = Map.keys vms
    passwdR grp = passwdResource (Map.keys vms) grp
    pubIfR = interfaceResource (mkIface "kipubr") cAddress (Map.keys vms)
-   systemdR hosts = ManyResources
+   mkSystemdR hosts = ManyResources
                   . Map.elems
                  <$> (T.sequence
                   $ Map.mapWithKey vmInitResource
@@ -115,6 +116,46 @@ ensure cfg@Config {..} Options {..} vms = do
    dnsmasqR = ManyResources $
        [vmDnsDhcpResource cfg, vmHostLeaseResource cAddress vmns]
    dirsR = ManyResources $ map (qemuRunDirsResource varrundir) vmns
+
+listResources :: Config -> Options -> State -> IO State
+listResources cfg@Config {..} opts@Options {..} s@State { sVms=vms } = do
+    kibGrp <- getGroupEntryForName "kib"
+    hosts <- allocateHosts oRoot cAddress vmns
+
+    rs <- resources cfg opts kibGrp hosts vms
+
+    mapM putStrLn $ resourcePaths rs
+
+    putStrLn "" >> putStrLn ""
+
+    -- TODO: root
+    mapM (putStrLn . show) =<< resourceOwners oRoot rs
+
+    return s
+
+ where
+   vmns = Map.keys vms
+
+ensure cfg@Config {..} opts@Options {..} vms = do
+    kibGrp <- getGroupEntryForName "kib"
+    hosts <- allocateHosts oRoot cAddress vmns
+
+    rs <- resources cfg opts kibGrp hosts vms
+
+    mapM putStrLn $ resourcePaths rs
+
+    swallow $ ensureResource oRoot rs
+
+    return $ Map.fromList hosts
+
+ where
+   vmns = Map.keys vms
+   swallow ma = do
+     eexa <- try $ evaluate =<< ma
+     case eexa of
+       Left (SomeException ex) -> hPutStrLn stderr $ "ensure: " ++ show ex
+       Right a -> return a
+
 
 setup :: Config -> Options -> State -> IO State
 setup cfg opts s = do
@@ -126,8 +167,14 @@ commands = subparser $ mconcat
   [ command "list" $ withInfo "Print names of all VMs" $
       pure list
 
-  , command "info" $ withInfo "Print names of all VMs" $
+  , command "list-resources" $ withInfo "Print all resource paths" $
+      pure listResources
+
+  , command "info" $ withInfo "Print details of a single VM" $
       infoCmd <$> strArgument (metavar "NAME")
+
+  , command "console" $ withInfo "Connect to VM console (socat)" $
+      console <$> strArgument (metavar "NAME")
 
   , command "create" $ withInfo "Create a new VM" $
       create <$> strArgument (metavar "name") <*> vmP
@@ -151,8 +198,36 @@ commands = subparser $ mconcat
 withInfo :: String -> Parser a -> ParserInfo a
 withInfo desc opts = info opts $ progDesc desc
 
+-- TODO: exec dat shit?
+adminConsole user = do
+  let 'k':'i':'b':'-':vm = user
+  putStr "> "
+  l <- dropWhileEnd isSpace . dropWhile isSpace <$> getLine
+  case l of
+    "console" -> console' vm
+    "reset" -> do
+        pro [ "killall", "-SIGQUIT", "qemu-system-x86_64" ]
+        threadDelay (500 * 1000)
+        console' vm
+    _ -> putStrLn "Unknown command" >> adminConsole user
+
 main = do
-  (opts, f) <- execParser $ info ((,) <$> optionsP <*> commands) fullDesc
-  cfg <- readConfig opts
-  modifyState opts (f cfg opts)
-  return ()
+  prog <- getProgName
+  case prog of
+    x | x == "kib-console" || x == "-kib-console"  -> do
+      hSetBuffering stdout NoBuffering
+
+      putStrLn ""
+      putStrLn "kvm-in-a-box VM admin console"
+      putStrLn "Commands:"
+      putStrLn "  > console"
+      putStrLn "  > reset"
+      putStrLn ""
+
+      adminConsole =<< getEnv "USER"
+
+    "kib" -> do
+      (opts, f) <- execParser $ info ((,) <$> optionsP <*> commands <**> helper) fullDesc
+      cfg <- readConfig opts
+      modifyState opts (f cfg opts)
+      return ()
