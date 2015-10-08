@@ -1,5 +1,6 @@
 module Console where
 
+{-
 import Network.Socket hiding (sendAll, recv)
 import Network.Socket.ByteString
 import Data.ByteString
@@ -21,3 +22,4 @@ console f = do
       bs <- hGetSome
       sendAll s bs
       send s [c]
+-}

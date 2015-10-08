@@ -1,6 +1,9 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 module IP where
 
+import Safe
 import Numeric
+import Data.IP
 import Data.Word
 import Data.Bits
 import Data.List
@@ -11,33 +14,35 @@ import Control.Arrow
 
 import BitUtils
 
-newtype IP = IP [Word8]
-    deriving (Eq, Ord, Show, Read, Generic)
+-- | CIDR prefix
+type Prefix = Int
+type Address a  = (a, Prefix)
 
-instance NFData IP
+showIP :: IPv4 -> String
+showIP6 :: IPv6 -> String
+readIP :: String -> IPv4
+readIP6 :: String -> IPv6
 
-showIP :: IP -> String
-showIP (IP cs) = intercalate "." $ map show cs
+showIP = show
+showIP6 = show
+readIP = readNote "IP"
+readIP6 = readNote "IP6"
 
-readIP :: String -> IP
-readIP str = let
-    ip@[_,_,_,_] = map read $ splitOn "." str
-  in
-    IP ip
+readIPRange :: forall ip. Read ip => String -> (ip, Prefix)
+readIPRange str = let
+    [(ip :: ip, '/':rest)] = reads str
+ in
+   (ip, readNote "readIPRange" rest)
 
-readNetmask :: String -> Int
-readNetmask s =
-    case read s of
-      prefixBits | prefixBits > 32 || prefixBits < 0 ->
-                error "enumerateIPs: Invalid netmask prefix."
-      prefixBits -> prefixBits
+showIPRange :: Show ip => (ip, Prefix) -> String
+showIPRange (ip, pfx) = show ip ++ "/" ++ show pfx
 
-enumerateIPs :: IP -> Int -> [IP]
+enumerateIPs :: IPv4 -> Int -> [IPv4]
 enumerateIPs _ prefixBits
     | prefixBits > 32 || prefixBits < 0 =
         error "enumerateIPs: Invalid netmask prefix."
-enumerateIPs (IP bs) prefixBits = let
-    x = mergeWords bs :: Word32
+enumerateIPs ip prefixBits = let
+    x = toHostAddress ip
 
     netmask =
         ((1 `shiftL` prefixBits) - 1) `shiftL` (32 - fromIntegral prefixBits)
@@ -52,7 +57,7 @@ enumerateIPs (IP bs) prefixBits = let
     netIps = filter (isProper hostmask)
            $ genericTake (subnetSize - host) allIps
   in
-    map (IP . splitWord) netIps
+    map fromHostAddress netIps
 
 isProper hostmask ip = let
     hostid = ip .&. hostmask

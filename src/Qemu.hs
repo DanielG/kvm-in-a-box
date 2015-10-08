@@ -12,22 +12,15 @@ import Types
 import MAC
 import Resource
 
-qemuRunDirsResource vardir vmn =
-    DirectoryResource {
-        rPath  = vardir </> vmn,
-        rPerms = ("kib-" ++ vmn, "kib"),
-        rOwner = OwnerKib
-    }
-
-qemu vardir Vm { vName, vSS = VmSS {..}, vVS = VmVS {..} } mac = concat $ [
+qemu rundir Vm { vName, vSS = VmSS {..}, vVS = VmVS {..} } mac = concat $ [
   [arch vArch],
   ["-cpu", "host"],
   ["-machine", "pc,accel=kvm"],
   ["-nographic"],
   ["-vga", "none"],
   ["-option-rom", "/usr/share/qemu/sgabios.bin"],
-  ["-monitor", "unix:"++ (vardir </> vName </> "monitor.unix") ++ ",server,nowait"],
-  ["-serial", "unix:"++ (vardir </> vName </> "ttyS0.unix") ++ ",server,nowait"],
+  ["-monitor", "unix:"++ (rundir </> "kib-" ++ vName </> "monitor.unix") ++ ",server,nowait"],
+  ["-serial", "unix:"++ (rundir </> "kib-" ++ vName </> "ttyS0.unix") ++ ",server,nowait"],
   ["-qmp", "stdio"],
   smp vCpus,
   mem vMem,

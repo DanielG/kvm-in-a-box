@@ -4,6 +4,7 @@ import Types
 import Resource
 import Data.List
 import Data.List.Split
+import Data.Maybe
 
 lvmOwnerResources :: [Vm] -> Resource
 lvmOwnerResources vms = FileResource {
@@ -11,7 +12,7 @@ lvmOwnerResources vms = FileResource {
     rNormalize = unlines . sort . lines,
     rParse = map own . parse,
     rUnparse = unparse,
-    rContentFunc = \ls -> nub $ ls ++ map (own . rs) vms
+    rContentFunc = \ls -> nub $ fromMaybe [] ls ++ map (own . rs) vms
   }
 
  where

@@ -34,9 +34,14 @@ Walkthrough (WIP)
 Network setup
 
     cat > /etc/kvm-in-a-box.cfg <<EOF
+    domain = kvm-box.example.net
     upstream-interface = eth0
-    address = 10.0.0.1/16
-    address6 = 2001:DB8::2/64
+
+    public-address = 10.0.0.1/16
+    public-address6 = 2001:DB8::2/64
+
+    private-address6 = fd13:5b76:af07::2/64
+    group-address6   = fded:4154:dde6::2/48
     EOF
 
 We assume you have a LVM volume group called vg0 already, you can change the

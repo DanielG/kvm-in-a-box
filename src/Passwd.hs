@@ -1,5 +1,6 @@
 module Passwd (passwdResource) where
 
+import Safe
 import Control.Arrow
 import Data.List
 import Data.List.Split
@@ -42,7 +43,7 @@ data ShadowEntry = ShadowEntry {
 data GroupEntry = GroupEntry {
       geName     :: String,
       gePassword :: String,
-      geGID      :: String,
+      geGID      :: CGid,
       geUserList :: [String]
     } deriving (Show)
 
@@ -54,18 +55,18 @@ passwdResource vmns kibGrp = ManyResources [
         \str -> unparsePwd $ filter (isKibUser peLoginName) $ parsePwd str,
 
     rParse = map markPwd . parsePwd,
-    rUnparse = unparsePwd,
+    rUnparse = unparsePwd :: [PasswdEntry] -> String,
 
-    rContentFunc = map markPwd . passwdDb vmns kibGrp . map snd
+    rContentFunc = map markPwd . passwdDb vmns kibGrp . map snd . fromMaybe []
   },
   FileResource {
     rPath = etcdir </> "shadow",
     rNormalize =
         \str -> unparseShd $ filter (isKibUser seLoginName) $ parseShd str,
     rParse = map markShd . parseShd,
-    rUnparse = unparseShd,
+    rUnparse = unparseShd :: [ShadowEntry] -> String,
 
-    rContentFunc = map markShd . shadowDb vmns . map snd
+    rContentFunc = map markShd . shadowDb vmns . map snd . fromMaybe []
   },
   FileResource {
     rPath = etcdir </> "group",
@@ -73,11 +74,19 @@ passwdResource vmns kibGrp = ManyResources [
     rNormalize =
         \str -> unparseGrp $ filter ((=="kvm") . geName) $ parseGrp str,
     rParse = map markGrp . parseGrp,
-    rUnparse = unparseGrp,
+    rUnparse = unparseGrp :: [GroupEntry] -> String,
 
-    rContentFunc = map markGrp . groupDb vmns . map snd
+    rContentFunc = map markGrp . groupDb vmns . map snd . fromMaybe []
   }
+  , ManyResources $ map homeDirectoryResource vmns
  ]
+
+homeDirectoryResource vmn =
+    DirectoryResource {
+      rPath = homedir </> "kib-" ++ vmn,
+      rPerms = ("kib-" ++ vmn, "kib"),
+      rOwner = OwnerKib
+    }
 
 markPwd x
     | isKibUser peLoginName x = (OwnerKib, x)
@@ -97,16 +106,21 @@ isKibUser u = ("kib-" `isPrefixOf`) . u
 unUid (CUid x) = x
 unGid (CGid x) = x
 
-passwdDb vmns kibGrp db = let
-    nextUid' :: UserID
-    nextUid' = (+1) $ foldr max 4999
-                    $ filter (< 65534)
-                    $ filter (>=5000)
-                    $ map peUID db
+nextId :: (Num a, Ord a) => [a] -> a
+nextId uids =
+    if next >= 65533
+      then error "Out of U/GIDs!"
+      else next
 
-    nextUid = if nextUid' >= 65533
-                then error "Out of UIDs!"
-                else nextUid'
+ where
+   next =
+    (+1) $ foldr max 4999
+         $ filter (< 65534)
+         $ filter (>=5000) uids
+
+passwdDb vmns kibGrp db = let
+    nextUid :: UserID
+    nextUid = nextId $ map peUID db
 
     others :: [PasswdEntry]
     kibs :: [(VmName, CUid)]
@@ -137,8 +151,7 @@ passwdDb vmns kibGrp db = let
            peUID = uid,
            peGID = PX.groupID kibGrp,
            peName = "",
-           peHome = varlibdir </> vmn,
-           -- TODO: make shell be socat wrapper
+           peHome = homedir </> "kib-" ++ vmn,
            peShell = "/usr/sbin/kib-console"
        }
 
@@ -165,10 +178,13 @@ shadowDb vmns db = let
            seReserved          = ""
        }
 
-groupDb vmns db = let
-    ([kvm], others) = partition ((=="kvm") . geName) db
-  in
-    others ++ [kvm { geUserList = map ("kib-"++) vmns }]
+groupDb :: [String] -> [GroupEntry] -> [GroupEntry]
+groupDb vmns db =
+    case partition ((=="kvm") . geName) db of
+    ([kvm], others) ->
+        others ++ [kvm { geUserList = map ("kib-"++) vmns }]
+    ([], others) ->
+        others ++ [GroupEntry "kib" "" (nextId $ map geGID db) (map ("kib-"++) vmns)]
 
 unparse :: (a -> String) -> [a] -> String
 unparse fn = unlines . map fn
@@ -179,15 +195,15 @@ unparseGrp = unparse ungrent
 
 unpwent (PasswdEntry l p u g n h s) =
     intercalate ":" [l, p, showUid u, showGid g, n, h, s]
- where
-   showUid (CUid x) = show x
-   showGid (CGid x) = show x
+
+showUid (CUid x) = show x
+showGid (CGid x) = show x
 
 unshent (ShadowEntry l p c mi ma w i e r) =
     intercalate ":" [l, p, c, mi, ma, w, i, e, r]
 
 ungrent (GroupEntry n p i us) =
-    intercalate ":" [n, p, i, intercalate "," us]
+    intercalate ":" [n, p, showGid i, intercalate "," us]
 
 parse :: (String -> a) -> String -> [a]
 parse pl str = map pl $ lines str
@@ -198,7 +214,7 @@ parseGrp = parse parseGrpLine
 
 parsePwdLine :: String -> PasswdEntry
 parsePwdLine li = let [l, p, u, g, n, h, s] = splitOn ":" li
-                  in PasswdEntry l p (CUid $ read u) (CGid $ read g) n h s
+                  in PasswdEntry l p (CUid $ readNote "CUid" u) (CGid $ readNote "CGid" g) n h s
 
 parseShdLine :: String -> ShadowEntry
 parseShdLine li = let [l, p, c, mi, ma, w, i, e, r] = splitOn ":" li
@@ -206,6 +222,6 @@ parseShdLine li = let [l, p, c, mi, ma, w, i, e, r] = splitOn ":" li
 
 parseGrpLine :: String -> GroupEntry
 parseGrpLine li = let [n, p, i, splitOn "," -> us] = splitOn ":" li
-                  in GroupEntry n p i us
+                  in GroupEntry n p (read i) us
 
 notExists l = null . filter ((==l) . peLoginName)

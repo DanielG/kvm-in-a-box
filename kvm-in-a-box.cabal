@@ -42,9 +42,18 @@ executable kib
                      , aeson
                      , unordered-containers
                      , text
+                     , iproute
+                     , safe
 
-  hs-source-dirs:      src
+  hs-source-dirs:      src, .
   default-language:    Haskell2010
+
+test-suite doctest
+  type:                exitcode-stdio-1.0
+  main-is:             Doctest.hs
+  hs-source-dirs:      tests
+  default-language:    Haskell2010
+  build-depends:       base, doctest
 
 executable kib-supervise
   main-is:             Supervise.hs
@@ -61,5 +70,5 @@ executable kib-supervise
                      , unordered-containers
                      , text
 
-  hs-source-dirs:      src
+  hs-source-dirs:      src, .
   default-language:    Haskell2010

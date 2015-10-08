@@ -5,6 +5,7 @@ import Control.Applicative
 import Data.Char
 import Data.Bool
 import Data.Maybe
+import Data.IP
 import System.Directory
 import System.Process
 import System.FilePath
@@ -16,14 +17,14 @@ import Utils
 import Config
 import IP
 
-interfaceResource :: Interface -> Address -> [VmName] -> Resource
-interfaceResource (unIface -> ifn) addr vms = ManyResources $ [
+interfaceResource :: Interface -> Address IPv4 -> Address IPv6 -> [VmName] -> Bool -> Resource
+interfaceResource (unIface -> ifn) addr addr6 vms amRoot = ManyResources $ [
     SimpleFileResource {
       rPath = etcdir </> "network/interfaces.d/"++ifn,
       rNormalize = unlines . concatMap ifupdownNormalize . lines,
-      rContent = br ifn vms (net addr),
+      rContent = br ifn addr6 vms (net addr),
       rOwner = OwnerKib
-    } ] ++ map ifaceRes vms
+    } ] ++ if amRoot then map ifaceRes vms else []
 
  where
    ifpf v = ifn ++ "-" ++ v
@@ -51,18 +52,17 @@ interfaceResource (unIface -> ifn) addr vms = ManyResources $ [
         i = mkIface $ ifpf vm
         usr = usrpf vm
 
-net (showIP -> addr, show -> nmask, showIP -> gw) = [
-  "address        " ++ addr,
-  "netmask        " ++ nmask,
-  "gateway        " ++ gw
+net (ip, prefix) = [
+  "address        " ++ showIP ip,
+  "netmask        " ++ show prefix
  ]
 
-br ifn vms lines = iface ifn $ [
+br ifn addr6 vms lines = iface ifn $ [
   "bridge_ports   " ++ unwords (map ifpf vms),
   "bridge_stp     off",
   "bridge_maxwait 0",
   "bridge_fd      0"
- ] ++ lines ++ concatMap (downstreamIface (mkIface . ifpf)) vms
+ ] ++ lines ++ concatMap (downstreamIface (mkIface ifn) (mkIface . ifpf) addr6) vms
  where ifpf v = ifn ++ "-" ++ v
 
 iface name lines = unlines $ [
@@ -72,12 +72,13 @@ iface name lines = unlines $ [
   -- dhcp server themselves
  ] ++ map ("  " ++) lines
 
-downstreamIface ifpf vm = [
-  "",
+downstreamIface ifn ifpf addr6 vm = [
   "pre-up " ++ unwords (tapAdd (ifpf vm) (usrpf vm)),
   "pre-up " ++ unwords (setIfstate (ifpf vm) (IfState "up")),
+  "up " ++ unwords (modIpv6 "add" ifn addr6),
 -- TODO: set static arp entry and filter everything else using arptables
 --  "pre-up" ++ unwords (arp (ifpf vm) mac),
+  "down " ++ unwords (modIpv6 "del" ifn addr6),
   "post-down " ++ unwords (setIfstate (ifpf vm) (IfState "down")),
   "post-down " ++ unwords (tapDel (ifpf vm))
  ]
@@ -96,10 +97,14 @@ tapAdd (unIface -> ifname) owner =
     ["ip", "tuntap", "add", "dev", ifname, "mode", "tap", "user", owner]
 
 tapDel (unIface -> ifname) =
-    ["ip", "tuntap", "del", "dev"]
+    ["ip", "tuntap", "del", "dev", ifname, "mode", "tap"]
 
 arp (unIface -> ifname) ip mac =
     ["arp", "-i", ifname, "-s", ip, mac]
+
+modIpv6 :: String -> Interface -> (IPv6, Prefix) -> [String]
+modIpv6 action (unIface -> ifname) iprange6 =
+    ["ip", "-6", "addr", action, showIPRange iprange6, "dev", ifname]
 
 ifstate :: Interface -> IO IfState
 ifstate (unIface -> ifname) = do

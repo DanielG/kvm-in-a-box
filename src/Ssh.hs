@@ -3,6 +3,7 @@ module Ssh (sshdResource) where
 import Control.Applicative ((<$>), (<*>), (<*), (*>))
 import Data.Char
 import Data.List
+import Data.Maybe
 import Text.Parsec hiding (parse)
 import Text.Parsec.Char
 import Text.Parsec.Prim hiding (parse)
@@ -11,14 +12,15 @@ import System.FilePath
 
 import Resource
 import Config
+import ParserUtils
 
 sshdResource :: Resource
 sshdResource = FileResource {
     rNormalize = \str -> concatMap unparse $ filter isOurs $ parse str,
     rPath = etcdir </> "ssh/sshd_config",
     rParse = map markOurs . parse,
-    rUnparse = concatMap unparse,
-    rContentFunc = addOrReplace (isOurs . snd) (OwnerKib, cfg)
+    rUnparse = concatMap unparse :: [SshCfgDir] -> String,
+    rContentFunc = addOrReplace (isOurs . snd) (OwnerKib, cfg) . fromMaybe []
   }
 -- [Owned SshCfgDir] -> [Owned SshCfgDir]
 
@@ -102,14 +104,3 @@ parseDirective = many1 alphaNum
 
 parseArgs :: Stream s m Char => ParsecT s u m [String]
 parseArgs = words <$> many1 nonNewline
-
-nonNewline      = satisfy (/='\n') <?> "non-newline"
-nonNewlineSpace = satisfy (\c -> c /= '\n' && isSpace c) <?> "non-newline-space"
-
-nnspaces = skipMany nonNewlineSpace
-
-lex :: String -> String
-lex = unlines
-    . filter (not . ("#"`isPrefixOf`) . dropWhile isSpace)
-    . filter (not . all isSpace)
-    . lines

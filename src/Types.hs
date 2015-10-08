@@ -1,6 +1,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Types where
 
+import Data.IP
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
@@ -10,6 +11,9 @@ import Data.Char
 import Data.List
 import Data.List.Split
 import Data.Aeson.TH
+import Data.Aeson
+import Data.Text (unpack, pack)
+import Text.Read hiding (String)
 
 import Control.DeepSeq
 import Control.Monad
@@ -24,17 +28,15 @@ import IP
 data Config = Config {
       cDomain    :: String,
       cInterface :: String,
-      cAddress   :: Address
-    }
+      cAddress   :: Address IPv4,
+      cAddress6  :: Address IPv6,
+      cPrivate6  :: Address IPv6,
+      cGroup6    :: Address IPv6
+    } deriving Show
 
 type VmName = String
 newtype Interface = Iface String
 type GroupInterface = String
-
--- | CIDR prefix
-type Netmask = Int
-type Gateway = IP
-type Address = (IP, Netmask, Gateway)
 
 mkIface ifn =
     if all (\c -> isAlphaNum c || c == '-') ifn
@@ -75,7 +77,7 @@ data Vm = Vm {
 data VmFlags = VmFlags {
       vSsFlag        :: VmSSFlags,
       vVsFlag        :: VmVSFlags
-    }
+    } deriving (Eq, Ord, Show, Read, Generic)
 
 combineVmFlags (VmFlags a b) (VmFlags a' b') =
     VmFlags (combineVmSSFlags a a') (combineVmVSFlags b b')
@@ -89,12 +91,12 @@ defVmFlags = mkVmFlags $ Vm (error "defVmFlags: undefined") defVmSS defVmVS
 
 data State = State {
       sVms :: Map VmName Vm,
-      sNet :: Map VmName (MAC, IP)
+      sNet :: Map VmName (MAC, IPv4)
     } deriving (Eq, Ord, Show, Read, Generic)
 
 defState = State Map.empty Map.empty
 
-instance NFData State
+--instance NFData State
 instance NFData Vm
 instance NFData VmSS
 instance NFData VmVS
@@ -105,3 +107,18 @@ deriveJSON defaultOptions ''MAC
 deriveJSON defaultOptions ''Vm
 deriveJSON defaultOptions ''VmSS
 deriveJSON defaultOptions ''VmVS
+
+
+instance FromJSON IPv4 where
+    parseJSON (String v) = maybe (fail "FromJSON IPv4") return $ readMaybe $ unpack v
+    parseJSON _          = mzero
+
+instance ToJSON IPv4 where
+    toJSON ip = String $ pack $ show ip
+
+instance FromJSON IPv6 where
+    parseJSON (String v) = maybe (fail "FromJSON IPv4") return $ readMaybe $ unpack v
+    parseJSON _          = mzero
+
+instance ToJSON IPv6 where
+    toJSON ip = String $ pack $ show ip

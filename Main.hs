@@ -6,6 +6,7 @@ import System.Directory
 import System.Process
 import System.Environment
 import System.Posix.User
+import System.Process
 import System.FilePath
 import System.IO
 import Control.Monad
@@ -23,6 +24,7 @@ import qualified Data.Set as Set
 import Data.Set (Set)
 import qualified Data.Map as Map
 import Data.Map (Map)
+import Data.IP
 import Text.Read
 import Text.Show.Pretty
 
@@ -94,28 +96,31 @@ console vmn cfg opts s@State {sVms=sVms0} = do
       return s
 
 console' vmn = do
-  hPutStrLn stderr "Type ^] to exit console."
-  pro [ "socat",  "STDIO,raw,echo=0,escape=0x1d",  "UNIX-CONNECT:" ++ (varrundir </> vmn </> "ttyS0.unix") ]
+  hPutStrLn stderr "Type RET to get a prompt (serial console)"
+  hPutStrLn stderr "Type ^] (ASCII GS) to exit console."
+  pro [ "socat",  "STDIO,raw,echo=0,escape=0x1d",  "UNIX-CONNECT:" ++ (varrundir </> "kib-" ++ vmn </> "ttyS0.unix") ]
 
 
 resources cfg@Config {..} Options {..} kibGrp hosts vms = do
-    systemdR <- mkSystemdR hosts
-    return $ ManyResources [ passwdR kibGrp, pubIfR, systemdR, dnsmasqR, dirsR
-                           , lvmOwnerResources $ Map.elems vms ]
+    amRoot <- amIRoot
+    return $ ManyResources [ passwdR kibGrp
+                           , pubIfR amRoot
+                           , mkSystemdR hosts
+                           , dnsmasqR
+                           , lvmOwnerResources $ Map.elems vms
+                           ]
  where
    vmns = Map.keys vms
    passwdR grp = passwdResource (Map.keys vms) grp
-   pubIfR = interfaceResource (mkIface "kipubr") cAddress (Map.keys vms)
+   pubIfR amRoot = interfaceResource (mkIface "kipubr") cAddress cAddress6 (Map.keys vms) amRoot
    mkSystemdR hosts = ManyResources
-                  . Map.elems
-                 <$> (T.sequence
+                  $ Map.elems
                   $ Map.mapWithKey vmInitResource
                   $ Map.map (\(vm, (mac,_ip)) -> qemu varrundir vm mac)
-                  $ Map.intersectionWith (,) vms (Map.fromList hosts))
+                  $ Map.intersectionWith (,) vms (Map.fromList hosts)
 
    dnsmasqR = ManyResources $
-       [vmDnsDhcpResource cfg, vmHostLeaseResource cAddress vmns]
-   dirsR = ManyResources $ map (qemuRunDirsResource varrundir) vmns
+       [vmDnsDhcpResource [(mkIface "kipubr")] cfg, vmHostLeaseResource cAddress vmns]
 
 listResources :: Config -> Options -> State -> IO State
 listResources cfg@Config {..} opts@Options {..} s@State { sVms=vms } = do
@@ -136,6 +141,7 @@ listResources cfg@Config {..} opts@Options {..} s@State { sVms=vms } = do
  where
    vmns = Map.keys vms
 
+ensure :: Config -> Options -> Map VmName Vm -> IO (Map VmName (MAC, IPv4))
 ensure cfg@Config {..} opts@Options {..} vms = do
     kibGrp <- getGroupEntryForName "kib"
     hosts <- allocateHosts oRoot cAddress vmns
@@ -145,6 +151,8 @@ ensure cfg@Config {..} opts@Options {..} vms = do
     mapM putStrLn $ resourcePaths rs
 
     swallow $ ensureResource oRoot rs
+
+    whenRoot $ void $ system "systemctl daemon-reload"
 
     return $ Map.fromList hosts
 
@@ -173,7 +181,7 @@ commands = subparser $ mconcat
   , command "info" $ withInfo "Print details of a single VM" $
       infoCmd <$> strArgument (metavar "NAME")
 
-  , command "console" $ withInfo "Connect to VM console (socat)" $
+  , command "console" $ withInfo "Connect to VM serial console (socat)" $
       console <$> strArgument (metavar "NAME")
 
   , command "create" $ withInfo "Create a new VM" $
@@ -204,6 +212,7 @@ adminConsole user = do
   putStr "> "
   l <- dropWhileEnd isSpace . dropWhile isSpace <$> getLine
   case l of
+    "" -> console' vm
     "console" -> console' vm
     "reset" -> do
         pro [ "killall", "-SIGQUIT", "qemu-system-x86_64" ]

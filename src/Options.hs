@@ -8,7 +8,7 @@ import qualified Data.Set as Set
 
 import Types
 
-data Options = Options { oRoot :: FilePath }
+data Options = Options { oRoot :: FilePath } deriving Show
 
 exceptP :: Either String a -> ReadM a
 exceptP (Left s)  = readerError s
@@ -44,23 +44,18 @@ vmVSP = VmVSFlags
             <<>> metavar "ARCH"
             <<>> help "Which CPU architecture the VM should use"
 
-     <*> Just <$$> switch $$
-                 long "user"
-            <<>> help "Enable the QEMU 'user' network interface"
-
-     <*> Just <$$> switch $$
-                 long "public"
-            <<>> help "Enable the public network interface"
-
-     <*> Just <$$> switch $$
-                 long "private"
-            <<>> help "Enable the private network interface"
+     <*> boolP "user" "the QEMU 'user' network interface"
+     <*> boolP "public" "the public network interface"
+     <*> boolP "private" "the private network interface"
 
      <*> optional $$ (Set.fromList <$> (some $$ strOption $$
                  long "net-group"
             <<>> metavar "ID"
             <<>> help "Attach VM to specified netork switch"))
 
+boolP n doc = optional $
+       flag' True $$ long n <<>> help ("Enable " ++ doc)
+  <||> flag' False $$ long ("no-"++n) <<>> help ("Disable " ++ doc)
 
 optionsP :: Parser Options
 optionsP = Options

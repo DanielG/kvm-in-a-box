@@ -2,6 +2,7 @@ module Dnsmasq (allocateHosts, vmDnsDhcpResource, vmHostLeaseResource) where
 
 import Control.Applicative
 import Control.Arrow
+import Data.IP
 import Data.Char
 import Data.List
 import Data.List.Split
@@ -19,38 +20,42 @@ import Utils
 import MAC
 import IP
 
-vmDnsDhcpResource :: Config -> Resource
-vmDnsDhcpResource cfg =
+vmDnsDhcpResource :: [Interface] -> Config -> Resource
+vmDnsDhcpResource bridges cfg =
   SimpleFileResource {
     rPath = etcdir </> "dnsmasq.d/kib",
     rOwner = OwnerKib,
     rNormalize = id,
     rContent =
-       unlines [ "domain="++cDomain cfg
-               , "dhcp-range=::,static" ]
+       unlines $ [ "domain="++cDomain cfg
+                 , "dhcp-hostsfile=/etc/dnsmasq.kib.hosts"
+                 , "enable-ra"
+                 , "dhcp-range="++(showIP $ fst $ cAddress cfg)++",static"
+                 ] ++
+                 ((\(unIface -> ifn) -> "dhcp-range=::,constructor:"++ifn++",slaac") `map` bridges)
  }
 
-vmHostLeaseResource :: Address -> [VmName] -> Resource
+vmHostLeaseResource :: Address IPv4 -> [VmName] -> Resource
 vmHostLeaseResource addr vmns =
   FileResource {
     rPath = kibHostsFile,
     rNormalize = unparse . sort . parse,
     rParse = addOwner . parse,
     rUnparse = unparse,
-    rContentFunc = addOwner . allocate addr vmns . map snd
+    rContentFunc = addOwner . allocate addr vmns . map snd . fromMaybe []
  }
 
 addOwner = map (\x@(vmn,_) -> (OwnerVm vmn, x))
 
 kibHostsFile = etcdir </> "dnsmasq.kib.hosts"
 
-allocateHosts :: FilePath -> Address -> [VmName] -> IO [(VmName, (MAC, IP))]
+allocateHosts :: FilePath -> Address IPv4 -> [VmName] -> IO [(VmName, (MAC, IPv4))]
 allocateHosts root addr vmns = do
   allocate addr vmns . parse . fromMaybe ""
     <$> readFileMaybe (rootRel root kibHostsFile)
 
-allocate :: Address -> [VmName] -> [(VmName, (MAC, IP))] -> [(VmName, (MAC, IP))]
-allocate (ip, nm, _gw) newHosts oldHosts = let
+allocate :: Address IPv4 -> [VmName] -> [(VmName, (MAC, IPv4))] -> [(VmName, (MAC, IPv4))]
+allocate (ip, nm) newHosts oldHosts = let
 --    oldHostsMap = Map.fromList oldHosts
 --    notNeededAnymore = foldr Map.delete oldHostsMap newHosts
 
@@ -59,7 +64,6 @@ allocate (ip, nm, _gw) newHosts oldHosts = let
 
     macs = drop 1 $ enumerateMACs maxMac
     ips  = drop 1 $ enumerateIPs maxIp nm
-
 
     thingsIHaveToAllocateNow = newHosts \\ map fst oldHosts
   in
@@ -83,10 +87,10 @@ host vmn mac ip = intercalate "," [showMAC mac, showIP ip, vmn, "infinite"]
 
 unhost [mac, ip, vmn, ttl] = (vmn, readMAC mac, readIP ip)
 
-unparse :: [(VmName, (MAC, IP))] -> String
+unparse :: [(VmName, (MAC, IPv4))] -> String
 unparse = unlines . sort . map (uncurry3 host . tup3)
 
-parse :: String -> [(VmName, (MAC, IP))]
+parse :: String -> [(VmName, (MAC, IPv4))]
 parse = map ( untup3 . unhost . splitOn ",")
       . filter (not . all isSpace)
       . lines

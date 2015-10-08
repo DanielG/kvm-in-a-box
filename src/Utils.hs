@@ -1,5 +1,6 @@
 module Utils where
 
+import Control.Monad
 import Data.List
 import Data.Char
 import System.Exit
@@ -8,6 +9,7 @@ import System.IO.Temp
 import System.IO
 import System.Directory
 import System.FilePath
+import System.Posix.User
 
 pro (cmd:args) = do
   res <- callProcess Nothing cmd args
@@ -33,3 +35,9 @@ writeFile' f c = do
 fst3 (x,_,_) = x
 snd3 (_,x,_) = x
 thd3 (_,_,x) = x
+
+amIRoot :: IO Bool
+amIRoot = (==0) <$> getRealUserID
+
+whenRoot :: IO () -> IO ()
+whenRoot a = join $ when <$> amIRoot <*> pure a

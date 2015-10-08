@@ -53,13 +53,13 @@ supervise (cmd:args) = go 0
 
      let msg = "Process exited (rv = "<>show rv<>")"
      if rv == ExitSuccess || not shouldRespawn
-       then
+       then do
          slog $ msg <> ", done supervising"
+         exitSuccess
 
        else do
          slog $ msg <> ", respawning"
-         -- max 8 sec
-         threadDelay ((2^i) * 1000) >> go (min 14 (i+1))
+         exitFailure
 
    errorReader se = swallow $
        forever $ hGetLine se >>= slog . (("stderr: ")<>)
@@ -77,6 +77,7 @@ supervise (cmd:args) = go 0
               eres <- parseQmp <$> hGetLine so
               case eres of
                 Right (Event "SHUTDOWN") -> print "SHUTDOWN" >> putMVar mv ()
+                Right (Event "RESET") -> print "RESET" -- TODO: make systemd restart the service on reset so the cmdline options are reloaded
                 _ -> return ()
            Right _ -> slog $ "Process returned invalid ack"
        Right _ -> slog $ "Process returned invalid qmp greeting"
