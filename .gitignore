@@ -1,0 +1,13 @@
+dist/
+*~
+/.cabal-sandbox/
+/.stack-work/
+add-source-timestamps
+package.cache
+cabal.sandbox.config
+*.o
+*.dyn_o
+*.hi
+*.dyn_hi
+/TAGS
+/tags
