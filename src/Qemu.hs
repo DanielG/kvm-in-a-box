@@ -27,9 +27,12 @@ qemu rundir Vm { vName, vSS = VmSS {..}, vVS = VmVS {..} } mac = concat $ [
   disk 0 ("/dev" </> vVg </> vName) Nothing,
   ["-net", "none"],
   vUserIf    ==> userNet "virtio" 2 [],
-  vPublicIf  ==> net ("kipubr-"++vName) "virtio" 0 mac
---  vPrivateIf ==> net ("kiprbr-"++vName) "virtio" 0 prMac,
--- TODO: Group interfaces
+  vPublicIf  ==> net ("kipubr-"++vName) "virtio" 0 mac,
+  vPrivateIf ==> net ("kiprivbr-"++vName) "virtio" 0 mac
+   -- TODO: in theory MAC addresses only have to be unique per segment, since
+   -- the private net is a seperate bridge we should be fine but who knows TODO:
+
+   -- TODO: Group interfaces
  ]
  where
    True  ==> f = f

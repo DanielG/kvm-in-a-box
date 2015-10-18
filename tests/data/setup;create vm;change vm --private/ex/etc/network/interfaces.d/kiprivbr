@@ -1,0 +1,12 @@
+auto kiprivbr
+iface kiprivbr inet static
+  bridge_ports   kiprivbr-vm
+  bridge_stp     off
+  bridge_maxwait 0
+  bridge_fd      0
+  pre-up ip tuntap add dev kiprivbr-vm mode tap user kib-vm
+  pre-up ip link set kiprivbr-vm up
+  up ip -6 addr add fd13:5b76:af07::2/64 dev kiprivbr
+  down ip -6 addr del fd13:5b76:af07::2/64 dev kiprivbr
+  post-down ip link set kiprivbr-vm down
+  post-down ip tuntap del dev kiprivbr-vm mode tap

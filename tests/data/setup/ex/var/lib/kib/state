@@ -1,0 +1,2 @@
+kvm-in-a-box state format: v2
+State {sVms = fromList [], sNet = fromList []}

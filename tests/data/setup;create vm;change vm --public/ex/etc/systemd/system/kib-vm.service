@@ -1,0 +1,12 @@
+[Unit]
+Description=Kvm-in-a-box VM: vm
+After=kvm-in-a-box.target
+
+[Service]
+User=kib-vm
+ExecStart=/usr/bin/env 'kib-supervise' 'kib-vm' '/usr/bin/qemu-system-x86_64' '-cpu' 'host' '-machine' 'pc,accel=kvm' '-nographic' '-vga' 'none' '-option-rom' '/usr/share/qemu/sgabios.bin' '-monitor' 'unix:/var/run/kib-vm/monitor.unix,server,nowait' '-serial' 'unix:/var/run/kib-vm/ttyS0.unix,server,nowait' '-qmp' 'stdio' '-smp' '1' '-m' '512' '-drive' 'file=/dev/kib/vm,id=hdd0,format=raw' '-device' 'virtio-scsi-pci' '-net' 'none' '-net' 'nic,vlan=0,macaddr=02:00:00:00:00:01,model=virtio' '-net' 'tap,vlan=0,ifname=kipubr-vm,script=no,downscript=no'
+Restart=on-failure
+RuntimeDirectory=kib-vm
+
+[Install]
+WantedBy=multi-user.target

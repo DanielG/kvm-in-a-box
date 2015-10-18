@@ -52,7 +52,7 @@ flagTH [d|
      } deriving (Eq, Ord, Show, Read, Generic)
  |]
 
-defVmSS = VmSS "vg0"
+defVmSS = VmSS "kib"
 
 flagTH [d|
  data VmVS = VmVS {

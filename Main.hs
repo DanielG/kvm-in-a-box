@@ -105,14 +105,37 @@ resources cfg@Config {..} Options {..} kibGrp hosts vms = do
     amRoot <- amIRoot
     return $ ManyResources [ passwdR kibGrp
                            , pubIfR amRoot
+                           , privIfR amRoot
                            , mkSystemdR hosts
                            , dnsmasqR
                            , lvmOwnerResources $ Map.elems vms
                            ]
  where
    vmns = Map.keys vms
-   passwdR grp = passwdResource (Map.keys vms) grp
-   pubIfR amRoot = interfaceResource (mkIface "kipubr") cAddress cAddress6 (Map.keys vms) amRoot
+
+   filterVMNs p = map vName $ filter p $ Map.elems vms
+
+   pubVms   = filterVMNs (vPublicIf . vVS)
+   privVms  = filterVMNs (vPrivateIf . vVS)
+   groupVms = filterVMNs (not . Set.null . vGroupIfs . vVS)
+
+
+   caddr = cAddress
+   caddr6 = cAddress6
+   cpriv6 = cPrivate6
+   -- cgrp6 = cGroup6
+
+   pubIfR _ | null pubVms = ManyResources []
+   pubIfR amRoot =
+    interfaceResource (mkIface "kipubr") (Just caddr) caddr6 pubVms amRoot
+
+   privIfR _ | null privVms = ManyResources []
+   privIfR amRoot =
+    interfaceResource (mkIface "kiprivbr") Nothing cpriv6 privVms amRoot
+
+   passwdR grp =
+       passwdResource (Map.keys vms) grp
+
    mkSystemdR hosts = ManyResources
                   $ Map.elems
                   $ Map.mapWithKey vmInitResource
@@ -120,7 +143,7 @@ resources cfg@Config {..} Options {..} kibGrp hosts vms = do
                   $ Map.intersectionWith (,) vms (Map.fromList hosts)
 
    dnsmasqR = ManyResources $
-       [vmDnsDhcpResource [(mkIface "kipubr")] cfg, vmHostLeaseResource cAddress vmns]
+       [vmDnsDhcpResource [(mkIface "kipubr"), (mkIface "kiprivbr")] cfg, vmHostLeaseResource cAddress vmns]
 
 listResources :: Config -> Options -> State -> IO State
 listResources cfg@Config {..} opts@Options {..} s@State { sVms=vms } = do
@@ -148,7 +171,7 @@ ensure cfg@Config {..} opts@Options {..} vms = do
 
     rs <- resources cfg opts kibGrp hosts vms
 
-    mapM putStrLn $ resourcePaths rs
+    -- mapM putStrLn $ resourcePaths rs
 
     swallow $ ensureResource oRoot rs
 

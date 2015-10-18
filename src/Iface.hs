@@ -17,12 +17,12 @@ import Utils
 import Config
 import IP
 
-interfaceResource :: Interface -> Address IPv4 -> Address IPv6 -> [VmName] -> Bool -> Resource
-interfaceResource (unIface -> ifn) addr addr6 vms amRoot = ManyResources $ [
+interfaceResource :: Interface -> Maybe (Address IPv4) -> Address IPv6 -> [VmName] -> Bool -> Resource
+interfaceResource (unIface -> ifn) maddr addr6 vms amRoot = ManyResources $ [
     SimpleFileResource {
       rPath = etcdir </> "network/interfaces.d/"++ifn,
       rNormalize = unlines . concatMap ifupdownNormalize . lines,
-      rContent = br ifn addr6 vms (net addr),
+      rContent = br ifn addr6 vms $ fromMaybe [] $ net <$> maddr,
       rOwner = OwnerKib
     } ] ++ if amRoot then map ifaceRes vms else []
 
@@ -57,13 +57,16 @@ net (ip, prefix) = [
   "netmask        " ++ show prefix
  ]
 
-br ifn addr6 vms lines = iface ifn $ [
-  "bridge_ports   " ++ unwords (map ifpf vms),
+br ifn addr6 vms lines = iface ifn $
+ br_ports ++ [
   "bridge_stp     off",
   "bridge_maxwait 0",
   "bridge_fd      0"
  ] ++ lines ++ concatMap (downstreamIface (mkIface ifn) (mkIface . ifpf) addr6) vms
- where ifpf v = ifn ++ "-" ++ v
+ where
+   ifpf v = ifn ++ "-" ++ v
+   br_ports | not $ null vms = [("bridge_ports   " ++ unwords (map ifpf vms))]
+            | otherwise = []
 
 iface name lines = unlines $ [
   "auto "++name,

@@ -42,23 +42,19 @@ enumerateIPs _ prefixBits
     | prefixBits > 32 || prefixBits < 0 =
         error "enumerateIPs: Invalid netmask prefix."
 enumerateIPs ip prefixBits = let
-    x = toHostAddress ip
+    netmask = intToMask prefixBits
+    hostmask = intToMask (-prefixBits)
 
-    netmask =
-        ((1 `shiftL` prefixBits) - 1) `shiftL` (32 - fromIntegral prefixBits)
-    hostmask = complement netmask
-
-    net  = x .&. netmask
-    host = x .&. hostmask
+    net  = ip `masked` netmask
 
     subnetSize = 2^(32 - prefixBits)
 
-    allIps = enumIntegral x
-    netIps = filter (isProper hostmask)
-           $ genericTake (subnetSize - host) allIps
-  in
-    map fromHostAddress netIps
+  in   filter (isProper hostmask)
+     $ drop 1 $ dropWhile (/=ip)
+     $ genericTake subnetSize
+     $ enumFrom net
 
+isProper :: IPv4 -> IPv4 -> Bool
 isProper hostmask ip = let
-    hostid = ip .&. hostmask
-  in hostid /= 0 && hostid /= hostmask
+    hostid = ip `masked` hostmask
+  in hostid /= (readIP "0.0.0.0") && hostid /= hostmask

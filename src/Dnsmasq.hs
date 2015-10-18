@@ -63,7 +63,7 @@ allocate (ip, nm) newHosts oldHosts = let
     maxIp  = maximum $ ip : map (snd . snd) oldHosts
 
     macs = drop 1 $ enumerateMACs maxMac
-    ips  = drop 1 $ enumerateIPs maxIp nm
+    ips  = enumerateIPs maxIp nm
 
     thingsIHaveToAllocateNow = newHosts \\ map fst oldHosts
   in
