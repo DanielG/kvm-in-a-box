@@ -14,7 +14,7 @@ import Data.Function
 import System.FilePath
 
 import Resource
-import Config
+import Files
 import Types
 import Utils
 import MAC

@@ -14,7 +14,7 @@ import System.Exit
 import Types
 import Resource
 import Utils
-import Config
+import Files
 import IP
 
 interfaceResource :: Interface -> Maybe (Address IPv4) -> Address IPv6 -> [VmName] -> Bool -> Resource

@@ -18,7 +18,7 @@ import System.FilePath
 
 import Log
 import Utils
-import Config
+import Files
 import Types
 
 data ResourceOwner =

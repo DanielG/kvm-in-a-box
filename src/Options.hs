@@ -8,7 +8,7 @@ import qualified Data.Set as Set
 
 import Types
 
-data Options = Options { oRoot :: FilePath } deriving Show
+data Options = Options { oRoot :: FilePath, oQuiet :: Bool } deriving Show
 
 exceptP :: Either String a -> ReadM a
 exceptP (Left s)  = readerError s
@@ -63,6 +63,13 @@ optionsP = Options
              long "root"
         <<>> metavar "ROOT"
         <<>> help "Use this directory instead of '/'"
+
+       <*> switch $$
+             short 'q'
+        <<>> long "quiet"
+        <<>> help "Be quiet"
+
+
 
 infixl 6 <||>
 infixl 7 <$$>

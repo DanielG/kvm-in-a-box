@@ -12,7 +12,7 @@ import System.FilePath
 import Debug.Trace
 
 import Resource
-import Config
+import Files
 import ParserUtils
 
 sshdResource :: Resource

@@ -6,7 +6,7 @@ import System.FilePath
 import System.Directory
 
 import Resource
-import Config
+import Files
 import Types
 
 vmInitResource :: VmName -> [String] -> Resource

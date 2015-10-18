@@ -16,7 +16,7 @@ import qualified System.Posix.User as PX
 
 import Types
 import Resource
-import Config
+import Files
 
 data PasswdEntry = PasswdEntry {
       peLoginName :: String,
