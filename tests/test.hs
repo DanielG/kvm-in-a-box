@@ -27,31 +27,41 @@ shellEscape str = intercalate "'\"'\"'" $ splitOn "'" str
 kib = "../dist/build/kib/kib"
 
 main = do
-  ds <- filterM ((isDirectory <$>) . getFileStatus . ("data"</>)) =<< ls "data"
-  let tests = filter (not . (`elem` ["common"])) ds
   let common = "data" </> "common"
+      test_groups = [ "data/clean-system"
+                    , "data/full-system"
+                    ]
 
-  res <- forM tests $ \test -> withSystemTempDirectory "kib" $ \tmp -> do
-    hPutStrLn stderr $ " - " ++ test
-    let tsrc = "data" </> test
-        tdir = tmp </> test
-        indir = tsrc </> "in"
-        outdir = tsrc </> "ex"
+  tdirs <- forM test_groups $ \gdir ->
+    filterM ((isDirectory <$>) . getFileStatus) =<< (map (gdir</>) <$> ls gdir)
+
+  let tests = concat tdirs
+
+  res <- forM tests $ \test_dir -> withTdirs $ \i e -> do
+    hPutStrLn stderr $ " - " ++ test_dir
+    let indir = test_dir </> "in"
+        exdir = test_dir </> "ex"
 
     in_exists <- doesDirectoryExist indir
+    ex_exists <- doesDirectoryExist exdir
 
-    rawSystem "cp" ["-r", common </> "in" </> ".", tdir]
+    rawSystem "cp" ["-r", common </> "in" </> ".", i]
+    rawSystem "cp" ["-r", common </> "ex" </> ".", e]
 
     when in_exists $
-         void $ rawSystem "cp" ["-r", indir </> ".", tmp </> test]
+         void $ rawSystem "cp" ["-r", indir </> ".", i]
 
---    rawSystem "ls" ["-lR", tdir]
-    let cmds = splitOn ";" test
-        runTestCmd cmd = kib ++ " --root '"++ shellEscape tdir ++ "' " ++ cmd
+    when ex_exists $
+         void $ rawSystem "cp" ["-r", exdir </> ".", e]
+
+    let cmds = splitOn ";" $ takeFileName test_dir
+        runTestCmd cmd = kib ++ " --root '"++ shellEscape i ++ "' " ++ cmd
 
     mapM (system . runTestCmd) cmds
 
-    (rv, diff, err)  <- readProcessWithExitCode "git" ["diff", "--no-index", "--color", "--word-diff=color", "--", outdir, tdir] ""
+    rawSystem "find" [i]
+
+    (rv, diff, err)  <- readProcessWithExitCode "git" ["diff", "--no-index", "--color", "--word-diff=color", "--", e, i] ""
 
     case rv of
       ExitSuccess -> return True
@@ -63,3 +73,16 @@ main = do
   if and res
      then exitSuccess
      else exitFailure
+
+withTdirs :: (FilePath -> FilePath -> IO a) -> IO a
+withTdirs f = do
+  withSystemTempDirectory "kib-in" $ \i ->
+    withSystemTempDirectory "kib-ex" $ \e ->
+      f i e
+ where
+   withSystemTempDirectory = withT
+
+withT tpl a = do
+  tmp <- getTemporaryDirectory
+  dir <- createTempDirectory tmp tpl
+  a dir
