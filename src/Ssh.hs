@@ -9,7 +9,10 @@ import Text.Parsec.Char
 import Text.Parsec.Prim hiding (parse)
 import Text.Parsec.Combinator
 import System.FilePath
+import Unsafe.Coerce
+
 import Debug.Trace
+import Text.Show.Pretty
 
 import Resource
 import Files
@@ -17,8 +20,9 @@ import ParserUtils
 
 sshdResource :: Resource
 sshdResource = FileResource {
-    rNormalize = \str -> concatMap unparse $ traceShowId $ filter isOurs $ parse str,
+    rNormalize = \str -> concatMap unparse $ filter isOurs $ parse str,
     rPath = etcdir </> "ssh/sshd_config",
+    rPerms = ((Nothing, Nothing), Just "644"),
     rParse = map markOurs . parse,
     rUnparse = concatMap unparse :: [SshCfgDir] -> String,
     rContentFunc = addOrReplace (isOurs . snd) (OwnerKib, cfg) . fromMaybe []
@@ -40,25 +44,30 @@ addOrReplace p x l = nubBy (both p) $ map (replace p x) l ++ [x]
 cf = addOrReplace (isOurs . snd) (OwnerKib, cfg) . fromMaybe []
 
 -- test_sshdResource :: Bool
--- test_sshdResource = case sshdResource of
---   FileResource {..} -> let
---       p0 = rContentFunc $ Just $ rParse src0
---       p2 = rContentFunc $ Just $ rParse src2
---     in
---       (p0 :: [(ResourceOwner, SshCfgDir)]) == (p2 :: [(ResourceOwner, SshCfgDir)])
+test_sshdResource = case sshdResource of
+  FileResource {..} -> let
+      p0 :: Owned [SshCfgDir]
+      p2 :: Owned [SshCfgDir]
+
+      p0 = unsafeCoerce $ rContentFunc $ Nothing
+      p2 = unsafeCoerce $ rContentFunc $ Just $ rParse src1
+    in
+      -- p0 == p2
+      (p0, p2)
 
 
 src0 = "Hello World\n"
-src1 = "Hello World\n\
-       \Match Group kib\n"
-src2 = "Hello World\n\
+
+src1 = "So and so\n\
+       \# Hello World\n\
+       \Match Group kib\n\
+       \This and that\n"
+
+src2 = "# Hello World\n\
        \Match Group kib\n\
        \AllowAgentForwarding no\n\
        \AllowTcpForwarding no\n\
        \AcceptEnv no\n"
-
-
-
 
 headMatch :: SshCfgDir -> SshCfgDir -> Bool
 headMatch (SshCfgDir d as _) (SshCfgDir d' as' _) =
@@ -68,13 +77,14 @@ headMatch _ _ = False
 cfg = SshCfgDir "Match" ["Group", "kib"] [
           SshCfgDir "AllowTcpForwarding" ["no"] [],
           SshCfgDir "AllowAgentForwarding" ["no"] [],
-          SshCfgDir "AcceptEnv" ["no"] []
+          SshCfgDir "AcceptEnv" ["no"] [],
+          SshCfgDir "X11Forwarding" ["no"] [],
+          SshCfgDir "PermitTunnel" ["no"] []
       ]
-
 
 data SshCfgLine = SshCfgLine { sclDir :: String, sclArgs :: [String] }
                 | SshCommentLine String
-                  deriving (Show)
+                  deriving (Eq, Show)
 
 data SshCfgDir = SshCfgDir {
                     scDirective :: String,
@@ -82,7 +92,7 @@ data SshCfgDir = SshCfgDir {
                     scSub       :: [SshCfgDir]
                    }
                | SshCommentDir String
-                  deriving (Show)
+                  deriving (Eq, Show)
 
 groupCfg :: [SshCfgLine] -> [SshCfgDir]
 groupCfg (SshCfgLine d as : ds)
@@ -98,6 +108,7 @@ isCollectDirective d = map toLower d == "host" || map toLower d == "match"
 
 collect = span (not . isCollectDirective . sclDir)
 
+unparse (SshCfgDir d as []) | null d = "\n"
 unparse (SshCfgDir d as []) =
     intercalate " " (d:as) ++ "\n"
 unparse (SshCfgDir d as subs) =
@@ -113,7 +124,10 @@ parse' str =
       Left err -> error (show err)
       Right a -> a
 
-parseSsh = many $ (try parseComment <|> parseLine) <* newline
+parseSsh =
+  (many $ (try parseComment <|> try parseLine <|> parseEmptyLine) <* newline) <* eof
+
+parseEmptyLine = return $ SshCfgLine "" []
 
 parseLine = SshCfgLine
     <$> (nnspaces *> parseDirective <* nnspaces)

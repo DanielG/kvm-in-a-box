@@ -1,2 +1,0 @@
-kvm-in-a-box state format: v2
-State {sVms = fromList [("vm",Vm {vName = "vm", vSS = VmSS {vVg = "kib"}, vVS = VmVS {vCpus = 1, vMem = 512, vArch = "x86_64", vUserIf = False, vPublicIf = False, vPrivateIf = False, vGroupIfs = fromList []}})], sNet = fromList [("vm",(MAC [2,0,0,0,0,1],10.0.0.2))]}

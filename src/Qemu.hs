@@ -12,21 +12,31 @@ import Types
 import MAC
 import Resource
 
-qemu rundir Vm { vName, vSS = VmSS {..}, vVS = VmVS {..} } mac = concat $ [
+data Qemu = Qemu {
+      qUserIfOpts :: [(String,String)],
+      qStdioConsole :: Bool,
+      qVm :: Vm
+    }
+
+qemu rundir Qemu { qVm = Vm { vName, vSS = VmSS {..}, vVS = VmVS {..} }, .. } mac = concat $ [
   [arch vArch],
   ["-cpu", "host"],
   ["-machine", "pc,accel=kvm"],
   ["-nographic"],
   ["-vga", "none"],
   ["-option-rom", "/usr/share/qemu/sgabios.bin"],
-  ["-monitor", "unix:"++ (rundir </> "kib-" ++ vName </> "monitor.unix") ++ ",server,nowait"],
-  ["-serial", "unix:"++ (rundir </> "kib-" ++ vName </> "ttyS0.unix") ++ ",server,nowait"],
-  ["-qmp", "stdio"],
+  case qStdioConsole of
+    True -> []
+    False -> concat [
+      ["-monitor", "unix:"++ (rundir </> "kib-" ++ vName </> "monitor.unix") ++ ",server,nowait"],
+      ["-serial", "unix:"++ (rundir </> "kib-" ++ vName </> "ttyS0.unix") ++ ",server,nowait"],
+      ["-qmp", "stdio"]
+      ],
   smp vCpus,
   mem vMem,
   disk 0 ("/dev" </> vVg </> vName) Nothing,
   ["-net", "none"],
-  vUserIf    ==> userNet "virtio" 2 [],
+  vUserIf    ==> userNet "virtio" 2 qUserIfOpts,
   vPublicIf  ==> net ("kipubr-"++vName) "virtio" 0 mac,
   vPrivateIf ==> net ("kiprivbr-"++vName) "virtio" 0 mac
    -- TODO: in theory MAC addresses only have to be unique per segment, since

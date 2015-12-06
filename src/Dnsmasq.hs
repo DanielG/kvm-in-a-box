@@ -24,6 +24,7 @@ vmDnsDhcpResource :: [Interface] -> Config -> Resource
 vmDnsDhcpResource bridges cfg =
   SimpleFileResource {
     rPath = etcdir </> "dnsmasq.d/kib",
+    rPerms = ((Nothing, Nothing), Just "644"),
     rOwner = OwnerKib,
     rNormalize = id,
     rContent =
@@ -39,6 +40,7 @@ vmHostLeaseResource :: Address IPv4 -> [VmName] -> Resource
 vmHostLeaseResource addr vmns =
   FileResource {
     rPath = kibHostsFile,
+    rPerms = ((Nothing, Nothing), Just "644"),
     rNormalize = unparse . sort . parse,
     rParse = addOwner . parse,
     rUnparse = unparse,

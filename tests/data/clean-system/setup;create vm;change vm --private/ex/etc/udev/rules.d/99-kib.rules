@@ -1,1 +1,0 @@
-ENV{DM_VG_NAME}=="kib" ENV{DM_LV_NAME}=="vm" OWNER="kib-vm"

@@ -35,7 +35,7 @@ data Config = Config {
     } deriving Show
 
 type VmName = String
-newtype Interface = Iface String
+newtype Interface = Iface String deriving (Eq, Show)
 type GroupInterface = String
 
 mkIface ifn =
@@ -52,7 +52,7 @@ flagTH [d|
      } deriving (Eq, Ord, Show, Read, Generic)
  |]
 
-defVmSS = VmSS "kib"
+defVmSS = VmSS "vg0"
 
 flagTH [d|
  data VmVS = VmVS {

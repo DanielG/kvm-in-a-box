@@ -3,7 +3,6 @@ kvm-in-a-box (KIB)
 
 Single box KVM virtualization server.
 
-
 Usage
 -----
 
@@ -28,6 +27,14 @@ Available commands:
 
 All commands also have their own --help output.
 
+Installation (WIP)
+------------------
+
+```
+apt-get install qemu-utils qemu-system-x86 lvm2 sgabios socat 7z dnsmasq bridge-utils
+```
+
+
 Walkthrough (WIP)
 -----------------
 
@@ -48,11 +55,9 @@ We assume you have a LVM volume group called vg0 already, you can change the
 name kib expects using the `--vg` switch though.
 
     root@kvm-box $ lvcreate vg0 -n foo -L 2G
-    root@kvm-box $ cat debian-7.img > /dev/vg0/foo
+    root@kvm-box $ cat debian-8.2.img > /dev/vg0/foo
     root@kvm-box $ kib create foo --public --mem 1024 --cpus 2
-    root@kvm-box $ kib key add foo <<EOF
-    ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDbkFdWWgJ76Nzg3F8WvnUmC3skEmY5AlkE6ah0ssDdVihUc6H2UVhdmaZTUg7mCkRSqsVVKAfILkOLcXKpBGzeTUkN312v2HOfj5LskdFjmQPhf+3vAIYHnUg/fptXkRd+9OMSdSwBv8ej2/BH9aRo+aoPvM1kw/ZlMDQAA83sIgvzqqcXKneX7KUAzplh05igMmxp9+EcZ2DEH343VD9jC7BXeF79m83nmLblyqwCS5Jty/dMqJGsSv6Z/eHpOSsDV0kBTWGZhHuZmvYaqHMYCznjZLJemJ/ipsjYn4UKNG5U7aN2Za2yKOOr8JkmE71+Ty2rbPM+Y+5LJy15Bc+P user@laptop
-    EOF
+    root@kvm-box $ kib authorize foo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDbkFdWWgJ76Nzg3F8WvnUmC3skEmY5AlkE6ah0ssDdVihUc6H2UVhdmaZTUg7mCkRSqsVVKAfILkOLcXKpBGzeTUkN312v2HOfj5LskdFjmQPhf+3vAIYHnUg/fptXkRd+9OMSdSwBv8ej2/BH9aRo+aoPvM1kw/ZlMDQAA83sIgvzqqcXKneX7KUAzplh05igMmxp9+EcZ2DEH343VD9jC7BXeF79m83nmLblyqwCS5Jty/dMqJGsSv6Z/eHpOSsDV0kBTWGZhHuZmvYaqHMYCznjZLJemJ/ipsjYn4UKNG5U7aN2Za2yKOOr8JkmE71+Ty2rbPM+Y+5LJy15Bc+P user@laptop"
     root@kvm-box $ systemctl enable kib-foo && systemctl start kib-foo
 
 You can now log into the VM's serial console via ssh:
@@ -67,6 +72,6 @@ You can now log into the VM's serial console via ssh:
     Type RET to get a prompt (serial console)
     Type ^] (ASCII GS) to exit console.
 
-    Debian GNU/Linux 7 (none) ttyS0
+    Debian GNU/Linux 8 (none) ttyS0
 
     (none) login:

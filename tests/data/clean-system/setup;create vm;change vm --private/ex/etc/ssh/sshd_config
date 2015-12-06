@@ -1,4 +1,0 @@
-Match Group kib
-  AllowTcpForwarding no
-  AllowAgentForwarding no
-  AcceptEnv no

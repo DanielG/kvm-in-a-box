@@ -10,13 +10,23 @@ import Files
 import Types
 
 vmInitResource :: VmName -> [String] -> Resource
-vmInitResource vmn (cmd:args) = do
-  SimpleFileResource {
-    rPath = etcdir </> "systemd/system/kib-" <> vmn <.> "service",
-    rOwner = OwnerVm vmn,
-    rNormalize = id,
-    rContent = service vmn $ "/usr/bin/env":"kib-supervise":("kib-"++vmn):cmd:args
- }
+vmInitResource vmn (cmd:args) = ManyResources [
+    SimpleFileResource {
+    -- /etc/systemd/user
+      rPath = etcdir </> "systemd/user/kib-" <> vmn <.> "service",
+      rPerms = ((Nothing, Nothing), Just "644"),
+      rOwner = OwnerVm vmn,
+      rNormalize = id,
+      rContent = service vmn $ "/usr/bin/env":"kib-supervise":("kib-"++vmn):cmd:args
+   },
+   SimpleFileResource {
+      rPath = "/var/lib/systemd/linger" </> ("kib-" ++ vmn),
+      rPerms = defaultFilePerms,
+      rOwner = OwnerVm vmn,
+      rNormalize = const "nonempty",
+      rContent = ""
+   }
+  ]
 
 service vmn (cmd:args) = "\
  \[Unit]\n\

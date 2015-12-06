@@ -38,7 +38,7 @@ main = do
   let tests = concat tdirs
 
   res <- forM tests $ \test_dir -> withTdirs $ \i e -> do
-    hPutStrLn stderr $ " - " ++ test_dir
+    putStrLn $ " ------------------------- " ++ test_dir ++ " -------------------------"
     let indir = test_dir </> "in"
         exdir = test_dir </> "ex"
 
@@ -59,7 +59,7 @@ main = do
 
     mapM (system . runTestCmd) cmds
 
-    rawSystem "find" [i]
+--    rawSystem "find" [i]
 
     (rv, diff, err)  <- readProcessWithExitCode "git" ["diff", "--no-index", "--color", "--word-diff=color", "--", e, i] ""
 

@@ -44,6 +44,10 @@ executable kib
                      , text
                      , iproute
                      , safe
+                     , uri
+                     , vcs-revision
+                     , mono-traversable
+                     , bifunctors
 
   hs-source-dirs:      src, .
   default-language:    Haskell2010

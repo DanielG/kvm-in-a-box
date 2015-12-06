@@ -51,6 +51,7 @@ passwdResource :: [VmName] -> PX.GroupEntry -> Resource
 passwdResource vmns kibGrp = ManyResources [
   FileResource {
     rPath = etcdir </> "passwd",
+    rPerms = ((Nothing, Nothing), Just "644"),
     rNormalize =
         \str -> unparsePwd $ filter (isKibUser peLoginName) $ parsePwd str,
 
@@ -61,6 +62,7 @@ passwdResource vmns kibGrp = ManyResources [
   },
   FileResource {
     rPath = etcdir </> "shadow",
+    rPerms = ((Nothing, Nothing), Just "600"),
     rNormalize =
         \str -> unparseShd $ filter (isKibUser seLoginName) $ parseShd str,
     rParse = map markShd . parseShd,
@@ -70,6 +72,7 @@ passwdResource vmns kibGrp = ManyResources [
   },
   FileResource {
     rPath = etcdir </> "group",
+    rPerms = ((Nothing, Nothing), Just "644"),
     -- TODO: filter out kib users from group members
     rNormalize =
         \str -> unparseGrp $ filter ((=="kvm") . geName) $ parseGrp str,
@@ -84,7 +87,7 @@ passwdResource vmns kibGrp = ManyResources [
 homeDirectoryResource vmn =
     DirectoryResource {
       rPath = homedir </> "kib-" ++ vmn,
-      rPerms = ("kib-" ++ vmn, "kib"),
+      rPerms = ((Just $ "kib-" ++ vmn, Just "kib"), Just "755"),
       rOwner = OwnerKib
     }
 
