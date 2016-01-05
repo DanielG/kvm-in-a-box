@@ -101,7 +101,7 @@ ensureResource root (DirectoryResource (rootRel root -> path) perms _row) = do
   e <- doesDirectoryExist path
   if e
      then do
-       whenRoot $ setPerms path perms
+       unlessTesting $ setPerms path perms
 
 
      -- then whenRoot $ do
@@ -119,7 +119,7 @@ ensureResource root (DirectoryResource (rootRel root -> path) perms _row) = do
      else do
        klog $ "directory '"++path++"' missing, creating."
        createDirectoryIfMissing True path
-       whenRoot $ setPerms path perms
+       unlessTesting $ setPerms path perms
 
  -- where
  --   getUid = userID <$> getUserEntryForName (fromMaybe "root" owner)
@@ -164,7 +164,6 @@ ensureResource _ IOResource {..} = do
   rUpdate a
 
 ensureResource root (ManyResources rs) = mapM_ (ensureResource root) rs
-
 
 resourcePaths (SimpleFileResource {rPath}) = [rPath]
 resourcePaths (FileResource {rPath}) = [rPath]

@@ -1,13 +1,20 @@
 module Utils where
 
 import Control.Monad
+import Control.Arrow
 import Control.Exception
+import Data.Bool
 import Data.List
 import Data.Char
+import Data.Either
+import Data.Bifunctor (Bifunctor, bimap)
+import Data.Functor.Identity
+import qualified Data.Map as Map
 import System.Exit
 import System.Process hiding (callProcess)
 import System.IO.Temp
 import System.IO
+import System.Environment
 import System.Directory
 import System.FilePath
 import System.Posix.User
@@ -35,8 +42,7 @@ writeFile'' f mpe c = do
      withTempFile (takeDirectory f) (takeFileName f) $ \tf h -> do
          hPutStr h c
          hClose h
-         amRoot <- amIRoot
-         when amRoot $ maybe (return ()) (setPerms tf) mpe
+         unlessTesting $ maybe (return ()) (setPerms tf) mpe
          renameFile tf f
 
 setPerms path (uidgid, mmask) = do
@@ -50,11 +56,23 @@ setPerms path (uidgid, mmask) = do
   maybe (return ()) (\mask -> void $ rawSystem "chmod" [mask, path]) mmask
   maybe (return ()) (\idmod -> void $ rawSystem "chown" [idmod, path]) midmod
 
-amIRoot :: IO Bool
-amIRoot = (==0) <$> getRealUserID
+-- amIRoot :: IO Bool
+-- amIRoot = (==0) <$> getRealUserID
 
-whenRoot :: IO () -> IO ()
-whenRoot a = join $ when <$> amIRoot <*> pure a
+-- whenRoot :: IO () -> IO ()
+-- whenRoot a = join $ when <$> amIRoot <*> pure a
+
+amNotTesting :: IO Bool
+amNotTesting =
+  (`elem` [Nothing, Just ""]) <$> lookupEnv "KIB_TESTING"
+
+whenTesting, unlessTesting :: IO () -> IO ()
+whenTesting a = do
+  nt <- amNotTesting
+  when (not nt) a
+unlessTesting a = do
+  nt <- amNotTesting
+  when nt a
 
 linkExists p =
   flip catch (\(SomeException _) -> return False) $ do
@@ -90,3 +108,149 @@ fst4 (a, b, c, d) = a
 snd4 (a, b, c, d) = b
 thd4 (a, b, c, d) = c
 fth4 (a, b, c, d) = d
+
+class IxFunctor i f | f -> i where
+    imap :: (i -> a -> b) -> f a -> f b
+
+class IxFoldable i t | t -> i where
+    ifoldr :: (i -> a -> b -> b) -> b -> t a -> b
+
+class IxFoldable i t => IxTraversable i t | t -> i where
+    itraverse :: Applicative f => (i -> a -> f b) -> t a -> f (t b)
+
+-- class IxTraversable i t => IxWitherable i t | t -> i where
+--     iwither :: Applicative f => (i -> a -> f (Maybe b)) -> t a -> f (t b)
+--     iwither f = fmap icatMaybes . itraverse f
+
+--     imapMaybe :: (i -> a -> Maybe b) -> t a -> t b
+--     imapMaybe f = runIdentity . iwither ((Identity.) . f)
+
+--     {-# MINIMAL iwither | imapMaybe #-}
+
+instance IxFunctor k (Map.Map k) where
+    imap = Map.mapWithKey
+
+instance IxFoldable k (Map.Map k) where
+    ifoldr = Map.foldrWithKey
+
+instance IxTraversable k (Map.Map k) where
+    itraverse f m = sequenceA $ Map.mapMaybeWithKey (\k a -> Just $ f k a) m
+
+-- instance IxWitherable k (Map.Map k) where
+--     imapMaybe = Map.mapMaybeWithKey
+
+
+-- ifilterA :: IxWitherable i t => Applicative f => (i -> a -> f Bool) -> t a -> f (t a)
+-- ifilterA f = iwither (\i a -> bool Nothing (Just a) <$> f i a)
+
+-- ifilter :: IxWitherable i t => (i -> a -> Bool) -> t a -> t a
+-- ifilter f = imapMaybe (\i a -> bool Nothing (Just a) $ f i a)
+
+-- icatMaybes :: IxWitherable i t => t (Maybe a) -> t a
+-- icatMaybes = imapMaybe (const id)
+
+
+-- test_stuff = do
+--   quickCheckWith args $ \(x :: T) ->
+--       uncurry unmpartition (mpartition x) == x
+
+--   quickCheckWith args $ \(x :: T) (ys :: [Int]) -> let
+--         (mas, bs) = mpartition x
+--       in
+--         unmpartition mas (bs ++ ys) == x ++ map Right ys
+
+--   quickCheckWith args $ \(xss :: AList Int (NonEmptyList (Int, Int))) -> let
+--         xss' = nubBy ((==) `on` fst) $ map (second getNonEmpty) xss
+--       in
+--         curryAList (uncurryAList xss') == xss'
+
+
+-- [Left 1, Left 2, Right 3, Left 4, Right 5, Right 6]
+-- ->
+-- [Just 1, Just 2, Nothing, Just 4, Nothing, Nothing]
+-- [3, 5, 6]
+
+prop_mpartition_append :: [Either Int Int] -> [Int] -> Bool
+prop_mpartition_append xs ys =
+    let (mas, bs) = mpartition xs
+    in unmpartition mas (bs ++ ys) == xs ++ map Right ys
+
+mpartition :: [Either a b] -> ([Maybe a], [b])
+mpartition = map (either Just (const Nothing)) &&& rights
+
+unmpartition :: [Maybe a] -> [b] -> [Either a b]
+unmpartition (Just a  : mas)    bs  = Left  a : unmpartition mas bs
+unmpartition (Nothing : mas) (b:bs) = Right b : unmpartition mas bs
+unmpartition [] bs = map Right bs
+unmpartition _ []  = []
+
+
+type AList k v = [(k, v)]
+
+uncurryAList :: AList k (AList kk v) -> AList (k, kk) v
+uncurryAList ass = assert (all (not . null . snd) ass) $
+    concat $ map (\(k,as) -> map (first (k,)) as ) ass
+
+curryAList :: Eq k => AList (k, kk) v -> AList k (AList kk v)
+curryAList ass = map (second (map (first snd))) $ groupByK (fst . fst) (==) ass
+
+prop_curryiso :: AList (Int, Int) Int -> Bool
+prop_curryiso xs = uncurryAList (curryAList xs) == xs
+
+prop_uncurryiso :: AList Int (AList Int Int) -> Bool
+prop_uncurryiso xs = curryAList (uncurryAList xs) == xs
+
+groupByK :: (a -> b) -> (b -> b -> Bool) -> [a] -> [(b, [a])]
+groupByK _ _  [] = []
+groupByK f eq (x:xs) =
+    (f x, (x:ys)) : groupByK f eq zs
+ where (ys,zs) = span (eq (f x) . f) xs
+
+alldifferent :: Eq a => [a] -> Bool
+alldifferent (x:xs) = all (/=x) xs && alldifferent xs
+alldifferent [] = True
+
+prop_alldifferent :: [Int] -> Bool
+prop_alldifferent xs = alldifferent (uniq xs)
+ where uniq = map head . group . sort
+
+unionAList :: Eq k => AList k v -> AList k v -> AList k v
+unionAList xs ys = checkKeysAList $ xs ++ ys
+
+unionsAList :: Eq k => [AList k v] -> AList k v
+unionsAList = checkKeysAList . concat
+
+unionAListWithKey :: Eq k => (k -> v -> v -> v) -> AList k v -> AList k v -> AList k v
+unionAListWithKey f (x@(k,v):xs) ys
+    | Just v' <- lookup k ys =
+      (k, f k v v') : unionAListWithKey f xs (filter ((/=k) . fst) ys)
+    | otherwise = x : unionAListWithKey f xs ys
+unionAListWithKey f [] ys = ys
+
+unionAListWith  :: Eq k => (v -> v -> v) -> AList k v -> AList k v -> AList k v
+unionAListWith f = unionAListWithKey (const f)
+
+unionsAListWithKey :: Eq k => (k -> v -> v -> v) -> [AList k v] -> AList k v
+unionsAListWithKey f = foldr (unionAListWithKey f) []
+
+unionsAListWith :: Eq k => (v -> v -> v) -> [AList k v] -> AList k v
+unionsAListWith f = foldr (unionAListWith f) []
+
+intersectionAListWith :: Eq k => (v -> v -> v) -> AList k v -> AList k v -> AList k v
+intersectionAListWith f xs ys = [ (x, f xv yv)
+                                | (x, xv) <- xs
+                                , (y, yv) <- ys
+                                , x == y
+                                ]
+
+-- unionsAListWith :: Eq k => (v -> v -> v) -> [AList k v] -> AList k v
+-- unionsAListWith f xss = foldr (unionAListWith f) [] xss
+
+checkKeysAList :: Eq a => [(a, b)] -> [(a, b)]
+checkKeysAList als = assert (alldifferent $ map fst als) als
+
+singletonAList :: k -> v -> AList k v
+singletonAList k v = (:[]) (k,v)
+
+both :: Bifunctor p => (c -> d) -> p c c -> p d d
+both f = bimap f f

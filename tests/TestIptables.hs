@@ -7,10 +7,15 @@ import Resource
 import Data.List
 import Data.Function
 
+import System.IO
+
 
 main = do
-  iss <- filterKib . unIptablesSave . parse <$> getContents
-  print iss
+  is <- parse <$> getContents
+  let is' = updateTables is
+  let ppis = unparse is'
+  print is'
+  hPutStrLn stderr ppis
 
 --  putStrLn "------"
 

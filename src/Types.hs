@@ -45,14 +45,20 @@ mkIface ifn =
 
 unIface (Iface ifn) = ifn
 
+data Firewall = Firewall {
+      fwPorts :: [(Word16, Word16)]
+    } deriving (Eq, Ord, Show, Read, Generic)
+
 flagTH [d|
  data VmSS = VmSS {
-       vVg :: String
+       vVg :: String,
+       vAuthorizedKeys :: [String],
+       vFirewall :: Firewall
  -- TODO: lvm disk handling
      } deriving (Eq, Ord, Show, Read, Generic)
  |]
 
-defVmSS = VmSS "vg0"
+defVmSS = VmSS "vg0" [] (Firewall [])
 
 flagTH [d|
  data VmVS = VmVS {
@@ -96,7 +102,7 @@ data State = State {
 
 defState = State Map.empty Map.empty
 
---instance NFData State
+instance NFData Firewall
 instance NFData Vm
 instance NFData VmSS
 instance NFData VmVS
@@ -104,6 +110,7 @@ instance NFData VmVS
 deriveJSON defaultOptions ''State
 deriveJSON defaultOptions ''IP
 deriveJSON defaultOptions ''MAC
+deriveJSON defaultOptions ''Firewall
 deriveJSON defaultOptions ''Vm
 deriveJSON defaultOptions ''VmSS
 deriveJSON defaultOptions ''VmVS

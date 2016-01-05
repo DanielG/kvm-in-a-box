@@ -1,7 +1,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Main where
 
-import Language.Haskell.TH.Syntax
+import qualified Language.Haskell.TH.Syntax as TH (qRunIO, lift)
 import Options.Applicative
 import Options.Applicative.Types
 import System.Directory
@@ -29,7 +29,7 @@ import Data.Set (Set)
 import qualified Data.Map as Map
 import Data.Map (Map)
 import Data.IP
-import Distribution.VcsRevision.Git
+--import Distribution.VcsRevision.Git
 import Text.Read
 import Text.Show.Pretty
 import Text.URI
@@ -129,10 +129,10 @@ console' vmn = do
 
 
 resources cfg@Config {..} Options {..} kibGrp hosts vms = do
-    amRoot <- amIRoot
+    notTesting <- amNotTesting
     return $ ManyResources [ passwdR kibGrp
-                           , pubIfR amRoot
-                           , privIfR amRoot
+                           , pubIfR notTesting
+                           , privIfR notTesting
                            , mkSystemdR hosts
                            , dnsmasqR
                            , lvmOwnerResources $ Map.elems vms
@@ -203,7 +203,7 @@ ensure cfg@Config {..} opts@Options {..} vms = do
 
     swallow $ ensureResource oRoot rs
 
-    whenRoot $ void $ system "systemctl daemon-reload"
+    unlessTesting $ void $ system "systemctl daemon-reload"
 
     return $ Map.fromList hosts
 
@@ -224,20 +224,23 @@ setup cfg opts s = do
 
 setupIptables :: Config -> Options -> State -> IO State
 setupIptables cfg opts s = do
-    ensureResource (oRoot opts) ip6tablesResource
+    ensureResource (oRoot opts) undefined -- ip6tablesResource
     return s
 
 commands :: Parser (Config -> Options -> State -> IO State)
 commands = subparser $ mconcat
-  [ command "git-version" $ withInfo "Print version intormation" $
-      pure $ putStrLn $(do
-        v <- qRunIO getRevision
-        lift $ case v of
-          Nothing           -> "<none>"
-          Just (hash,True)  -> hash ++ " (with local modifications)"
-          Just (hash,False) -> hash)
+  [
+    -- command "git-version" $ withInfo "Print version intormation" $
+    --   pure $ const $ const $ \s -> do
+    --     putStrLn $(do
+    --       v <- TH.qRunIO getRevision
+    --       TH.lift $ case v of
+    --         Nothing           -> "<none>"
+    --         Just (hash,True)  -> hash ++ " (with local modifications)"
+    --         Just (hash,False) -> hash)
+    --     return s
 
-  , command "list" $ withInfo "Print names of all VMs" $
+    command "list" $ withInfo "Print names of all VMs" $
       pure list
 
   , command "list-resources" $ withInfo "Print all resource paths" $

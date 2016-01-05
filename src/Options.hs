@@ -2,6 +2,7 @@ module Options where
 
 import Options.Applicative
 import Options.Applicative.Types
+import Data.Word
 import Data.Maybe
 import Data.Monoid
 import qualified Data.Set as Set
@@ -17,7 +18,37 @@ exceptP (Right a) = return a
 intOption :: Mod OptionFields Int -> Parser Int
 intOption = option auto
 
+readIntegralSafe :: forall a. (Integral a, Read a, Bounded a) => String -> Either String a
+readIntegralSafe str = let
+    i = read str :: Integer
+    min = toInteger (minBound :: a)
+    max = toInteger (maxBound :: a)
+  in if i < min || i > max
+       then Left $ "readIntegralSafe: out of bounds, should be between "++show min++" and "++show max
+       else Right $ fromIntegral i
+
+parseIntegralSafe :: (Integral a, Read a, Bounded a) => String -> ReadM a
+parseIntegralSafe str =
+    case readIntegralSafe str of
+      Right x -> return x
+      Left err -> readerError err
+
+portOptionP :: Mod OptionFields (Word16, Word16) -> Parser (Word16, Word16)
+portOptionP = option $ do
+  str <- readerAsk
+  case span (/=':') str of
+    (intern, ':':extern) ->
+        (,) <$> parseIntegralSafe intern <*> parseIntegralSafe extern
+    _ -> readerError "portOptionP: expecting format 'IPORT:EPORT'"
+
 defaultOpt x f = fromMaybe x <$> optional f
+
+firewallP :: Parser Firewall
+firewallP = Firewall
+         <$> many $$ portOptionP $$
+                 long "port"
+            <<>> metavar "IPORT:EPORT"
+            <<>> help "NAT port forwarding IPORT at VM, EPORT from beyond the firewall"
 
 vmP :: Parser VmFlags
 vmP = VmFlags <$> vmSSP <*> vmVSP
@@ -28,6 +59,8 @@ vmSSP = VmSSFlags
                  long "vg"
             <<>> metavar "LVM_VG"
             <<>> help "LVM volume group this vm resides on"
+     <*> pure Nothing
+     <*> optional $$ firewallP
 
 vmVSP :: Parser VmVSFlags
 vmVSP = VmVSFlags

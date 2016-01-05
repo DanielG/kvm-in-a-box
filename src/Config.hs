@@ -40,7 +40,7 @@ writeState opts s = do
     let f = rootRel (oRoot opts) stateFile
     createDirectoryIfMissing True (takeDirectory f)
     writeFile' f $
-      "kvm-in-a-box state format: v2\n" ++ show s ++ "\n"
+      "kvm-in-a-box state format: v3\n" ++ show s ++ "\n"
 
 modifyState opts f = do
   s <- readState opts
