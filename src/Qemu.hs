@@ -18,7 +18,7 @@ data Qemu = Qemu {
       qVm :: Vm
     }
 
-qemu rundir Qemu { qVm = Vm { vName, vSS = VmSS {..}, vVS = VmVS {..} }, .. } mac = concat $ [
+qemu rundir Qemu { qVm = Vm { vName, vCfg = VmCfg {..}, vSysCfg = VmSysCfg {..}, vNetCfg = VmNetCfg {..}, vQCfg = VmQCfg {..} }, .. } mac = concat $ [
   [arch vArch],
   ["-cpu", "host"],
   ["-machine", "pc,accel=kvm"],

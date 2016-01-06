@@ -45,55 +45,93 @@ mkIface ifn =
 
 unIface (Iface ifn) = ifn
 
-data Firewall = Firewall {
-      fwPorts :: [(Word16, Word16)]
-    } deriving (Eq, Ord, Show, Read, Generic)
-
 flagTH [d|
- data VmSS = VmSS {
-       vVg :: String,
-       vAuthorizedKeys :: [String],
-       vFirewall :: Firewall
- -- TODO: lvm disk handling
+ -- | virtual machine type configuration
+ data VmCfg = VmCfg {
+       vArch      :: String
      } deriving (Eq, Ord, Show, Read, Generic)
  |]
 
-defVmSS = VmSS "vg0" [] (Firewall [])
+defVmCfg = VmCfg "x86_64"
+
 
 flagTH [d|
- data VmVS = VmVS {
-       vCpus      :: Int,
-       vMem       :: Int,
-       vArch      :: String,
+ data VmSysCfg = VmSysCfg {
+ -- | VM system configuration, i.e. stuff we setup on the host system
+       vVg :: String,
+       -- TODO: lvm disk handling
+
+       vAuthorizedKeys :: [String]
+     } deriving (Eq, Ord, Show, Read, Generic)
+ |]
+
+defVmSysCfg = VmSysCfg "vg0" []
+
+
+flagTH [d|
+ -- | VM network configuration
+ data VmNetCfg = VmNetCfg {
        vUserIf    :: Bool,
        vPublicIf  :: Bool,
        vPrivateIf :: Bool,
-       vGroupIfs  :: Set GroupInterface
+       vGroupIfs  :: Set GroupInterface,
+       vForwardedPorts4 :: [(Word16, Word16)],
+       vOpenPorts6 :: [Word16] -- TODO
      } deriving (Eq, Ord, Show, Read, Generic)
  |]
 
-defVmVS = VmVS 1 512 "x86_64" False False False Set.empty
+defVmNetCfg = VmNetCfg False False False Set.empty [] []
+
+flagTH [d|
+ -- | VM quota configuration
+ data VmQCfg = VmQCfg {
+       vCpus      :: Int,
+       vMem       :: Int
+     } deriving (Eq, Ord, Show, Read, Generic)
+ |]
+
+defVmQCfg = VmQCfg 1 512
 
 data Vm = Vm {
-      vName      :: VmName,
-      vSS        :: VmSS,
-      vVS        :: VmVS
-    } deriving (Eq, Ord, Show, Read, Generic)
+       vName      :: VmName,
+       vCfg       :: VmCfg,
+       vSysCfg    :: VmSysCfg,
+       vNetCfg    :: VmNetCfg,
+       vQCfg      :: VmQCfg
+     } deriving (Eq, Ord, Show, Read, Generic)
 
 data VmFlags = VmFlags {
-      vSsFlag        :: VmSSFlags,
-      vVsFlag        :: VmVSFlags
-    } deriving (Eq, Ord, Show, Read, Generic)
+       vCfgFlag    :: VmCfgFlags,
+       vSysCfgFlag :: VmSysCfgFlags,
+       vNetCfgFlag :: VmNetCfgFlags,
+       vQCfgFlag   :: VmQCfgFlags
+     } deriving (Eq, Ord, Show, Read, Generic)
 
-combineVmFlags (VmFlags a b) (VmFlags a' b') =
-    VmFlags (combineVmSSFlags a a') (combineVmVSFlags b b')
+combineVmFlags (VmFlags a b c d) (VmFlags a' b' c' d') =
+    VmFlags
+      (combineVmCfgFlags a a')
+      (combineVmSysCfgFlags b b')
+      (combineVmNetCfgFlags c c')
+      (combineVmQCfgFlags d d')
 
-unVmFlags name (VmFlags a b) =
-    Vm name (unVmSSFlags a) (unVmVSFlags b)
+unVmFlags name (VmFlags a b c d) =
+    Vm
+      name
+      (unVmCfgFlags a)
+      (unVmSysCfgFlags b)
+      (unVmNetCfgFlags c)
+      (unVmQCfgFlags d)
 
-mkVmFlags Vm {..} = VmFlags (mkVmSSFlags vSS) (mkVmVSFlags vVS)
+mkVmFlags Vm {..} =
+    VmFlags
+      (mkVmCfgFlags vCfg)
+      (mkVmSysCfgFlags vSysCfg)
+      (mkVmNetCfgFlags vNetCfg)
+      (mkVmQCfgFlags vQCfg)
 
-defVmFlags = mkVmFlags $ Vm (error "defVmFlags: undefined") defVmSS defVmVS
+defVm name = Vm name defVmCfg defVmSysCfg defVmNetCfg defVmQCfg
+
+defVmFlags = mkVmFlags $ defVm (error "defVmFlags: name undefined")
 
 data State = State {
       sVms :: Map VmName Vm,
@@ -102,19 +140,20 @@ data State = State {
 
 defState = State Map.empty Map.empty
 
-instance NFData Firewall
 instance NFData Vm
-instance NFData VmSS
-instance NFData VmVS
+instance NFData VmCfg
+instance NFData VmSysCfg
+instance NFData VmNetCfg
+instance NFData VmQCfg
 
 deriveJSON defaultOptions ''State
 deriveJSON defaultOptions ''IP
 deriveJSON defaultOptions ''MAC
-deriveJSON defaultOptions ''Firewall
 deriveJSON defaultOptions ''Vm
-deriveJSON defaultOptions ''VmSS
-deriveJSON defaultOptions ''VmVS
-
+deriveJSON defaultOptions ''VmCfg
+deriveJSON defaultOptions ''VmSysCfg
+deriveJSON defaultOptions ''VmNetCfg
+deriveJSON defaultOptions ''VmQCfg
 
 instance FromJSON IPv4 where
     parseJSON (String v) = maybe (fail "FromJSON IPv4") return $ readMaybe $ unpack v

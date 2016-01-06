@@ -17,7 +17,7 @@ lvmOwnerResources vms = FileResource {
   }
 
  where
-   rs Vm { vName=vmn, vSS=VmSS {vVg=vg} } =
+   rs Vm { vName=vmn, vSysCfg=VmSysCfg {vVg=vg} } =
        [ ("ENV{DM_VG_NAME}==", qt vg)
        , ("ENV{DM_LV_NAME}==", qt vmn)
        , ("OWNER=", qt $ "kib-" ++ vmn)

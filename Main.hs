@@ -142,9 +142,9 @@ resources cfg@Config {..} Options {..} kibGrp hosts vms = do
 
    filterVMNs p = map vName $ filter p $ Map.elems vms
 
-   pubVms   = filterVMNs (vPublicIf . vVS)
-   privVms  = filterVMNs (vPrivateIf . vVS)
-   groupVms = filterVMNs (not . Set.null . vGroupIfs . vVS)
+   pubVms   = filterVMNs (vPublicIf . vNetCfg)
+   privVms  = filterVMNs (vPrivateIf . vNetCfg)
+   groupVms = filterVMNs (not . Set.null . vGroupIfs . vNetCfg)
 
    caddr = cAddress
    caddr6 = cAddress6
@@ -320,8 +320,11 @@ installDebian vmn mfile = void $ do
     let
         cmd:args' = flip (qemu varrundir) undefined
                   $ Qemu [("tftp", tmp)] True
-                  $ Vm vmn defVmSS
-                  $ VmVS 2 1024 "x86_64" True False False Set.empty
+                  $ Vm vmn
+                       defVmCfg
+                       defVmSysCfg
+                       defVmNetCfg { vUserIf = True }
+                       defVmQCfg { vCpus = 2, vMem = 1024 }
 
         args = args' ++ [ "-kernel", tmp </> "install.amd/vmlinuz"
                         , "-initrd", tmp </> "install.amd/initrd.gz"

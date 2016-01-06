@@ -33,8 +33,11 @@ parseIntegralSafe str =
       Right x -> return x
       Left err -> readerError err
 
-portOptionP :: Mod OptionFields (Word16, Word16) -> Parser (Word16, Word16)
-portOptionP = option $ do
+portOptionP :: Mod OptionFields Word16 -> Parser Word16
+portOptionP = option $ parseIntegralSafe =<< readerAsk
+
+portTupOptionP :: Mod OptionFields (Word16, Word16) -> Parser (Word16, Word16)
+portTupOptionP = option $ do
   str <- readerAsk
   case span (/=':') str of
     (intern, ':':extern) ->
@@ -43,27 +46,52 @@ portOptionP = option $ do
 
 defaultOpt x f = fromMaybe x <$> optional f
 
-firewallP :: Parser Firewall
-firewallP = Firewall
-         <$> many $$ portOptionP $$
-                 long "port"
-            <<>> metavar "IPORT:EPORT"
-            <<>> help "NAT port forwarding IPORT at VM, EPORT from beyond the firewall"
-
 vmP :: Parser VmFlags
-vmP = VmFlags <$> vmSSP <*> vmVSP
+vmP = VmFlags <$> vmCfgP <*> vmSysCfgP <*> vmNetCfgP <*> vmQCfgP
 
-vmSSP :: Parser VmSSFlags
-vmSSP = VmSSFlags
+vmCfgP :: Parser VmCfgFlags
+vmCfgP = VmCfgFlags
+     <$> optional $$ strOption $$
+               long "arch"
+            <<>> metavar "ARCH"
+            <<>> help "Which CPU architecture the VM should use"
+
+vmSysCfgP :: Parser VmSysCfgFlags
+vmSysCfgP = VmSysCfgFlags
      <$> optional $$ strOption $$
                  long "vg"
             <<>> metavar "LVM_VG"
             <<>> help "LVM volume group this vm resides on"
-     <*> pure Nothing
-     <*> optional $$ firewallP
 
-vmVSP :: Parser VmVSFlags
-vmVSP = VmVSFlags
+     <*> optional $$ many $$ strOption $$
+                 long "ssh-key"
+            <<>> metavar "ID_XXX.PUB"
+            <<>> help "SSH public key to add to VM console's authorized_keys"
+
+vmNetCfgP :: Parser VmNetCfgFlags
+vmNetCfgP = VmNetCfgFlags
+     <$> boolP "user" "the QEMU 'user' network interface"
+     <*> boolP "public" "the public network interface"
+     <*> boolP "private" "the private network interface"
+
+     <*> optional $$ (Set.fromList <$> (some $$ strOption $$
+                 long "net-group"
+            <<>> metavar "ID"
+            <<>> help "Attach VM to specified netork switch"))
+
+     <*> optional $$ many $$ portTupOptionP $$
+                 long "forward4"
+            <<>> metavar "IPORT:EPORT"
+            <<>> help "NAT port forwarding IPORT at VM, EPORT from beyond the firewall"
+
+     <*> optional $$ many $$ portOptionP $$
+                 long "open6"
+            <<>> metavar "PORT"
+            <<>> help "Open a port on the v6 firewall"
+
+
+vmQCfgP :: Parser VmQCfgFlags
+vmQCfgP = VmQCfgFlags
      <$> optional $$ intOption $$
                long "cpus"
             <<>> metavar "CORES"
@@ -72,19 +100,6 @@ vmVSP = VmVSFlags
                long "mem"
             <<>> metavar "MB"
             <<>> help "How many of memory [MB] to give the VM"
-     <*> optional $$ strOption $$
-               long "arch"
-            <<>> metavar "ARCH"
-            <<>> help "Which CPU architecture the VM should use"
-
-     <*> boolP "user" "the QEMU 'user' network interface"
-     <*> boolP "public" "the public network interface"
-     <*> boolP "private" "the private network interface"
-
-     <*> optional $$ (Set.fromList <$> (some $$ strOption $$
-                 long "net-group"
-            <<>> metavar "ID"
-            <<>> help "Attach VM to specified netork switch"))
 
 boolP n doc = optional $
        flag' True $$ long n <<>> help ("Enable " ++ doc)

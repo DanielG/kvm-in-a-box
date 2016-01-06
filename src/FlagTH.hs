@@ -36,6 +36,9 @@ import Language.Haskell.TH.Syntax
 --
 -- unAFlags (AFlags (Just a) (Just b) (Just c)) =
 --     A a b c
+--
+-- mkAFlags (A a b c) =
+--     AFlags (Just a) (Just b) (Just c)
 -- @
 flagTH :: Q [Dec] -> Q [Dec]
 flagTH qds = qds >>= \ds ->

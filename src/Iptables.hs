@@ -33,6 +33,7 @@ import MapJoin
 import Resource
 import Utils
 import Files
+import Types
 
 data IptablesSave r = IptablesSave {
       isComments :: [Maybe String]
@@ -79,14 +80,14 @@ instance FromOwned (IS r) where
 newtype IS r = IS { unIS :: IptablesSave [r] }
     deriving (Functor)
 
-ip6tablesResource :: Resource
-ip6tablesResource = undefined -- FileResource {
-    -- rNormalize = id, --unparse . parse,
-    -- rPath = etcdir </> "iptables/rules.v6",
-    -- rParse = markOurs . IS . parse,
-    -- rUnparse = unparse . unIS,
-    -- rContentFunc = markOurs . updateIS . fmap disown
-
+ip6tablesResource :: VmNetCfg -> Resource
+ip6tablesResource _ = FileResource {
+    rNormalize = id, --unparse . parse,
+    rPath = etcdir </> "iptables/rules.v6",
+    rParse = markOurs . IS . parse,
+    rUnparse = unparse . unIS,
+    rContentFunc = markOurs . updateIS . fmap disown
+  }
 -- markOurs . ( _ :: Maybe (IptablesSave [(ResourceOwner, ISRule)]) -> IptablesSave [(ResourceOwner, ISRule)]) . fmap disown
 
            -- $ fromMaybe (IptablesSave [] []) mois
@@ -121,16 +122,6 @@ jumpTable = map (second snd) $ defaultTables' jumpPolicy jumpRule
 insertKibChains :: IptablesSave [ISRule] -> IptablesSave [ISRule]
 insertKibChains = id
 
-kib_chains = []
-
-   -- redir = Map.singleton "INPUT" $ ISC Nothing [
-   --          ["-A", "INPUT", "-j", "KIB_INPUT"]
-   --         ]
-   -- kib_input = ISC Nothing [
-   --              ["-A", "KIB_INPUT", "-j", "RETURN"]
-   --             ]
-
-
 defaultTables = defaultTables' accept empty
  where
    accept c = Just $ (c, ISP (Just "ACCEPT") 0 0)
@@ -146,10 +137,10 @@ defaultTables' pf rf =
                  )
       )
 
-    , ("mangle", ( mapMaybe pf mangle_chains
-                 , map rf  mangle_chains
-                 )
-      )
+    -- , ("mangle", ( mapMaybe pf mangle_chains
+    --              , map rf  mangle_chains
+    --              )
+    --   )
 
     , ("filter", ( mapMaybe pf filter_chains
                  , map rf  filter_chains
@@ -162,12 +153,12 @@ defaultTables' pf rf =
                    , "POSTROUTING"
                    ]
 
-   mangle_chains = [ "PREROUTING"
-                   , "INPUT"
-                   , "FORWARD"
-                   , "OUTPUT"
-                   , "POSTROUTING"
-                   ]
+   -- mangle_chains = [ "PREROUTING"
+   --                 , "INPUT"
+   --                 , "FORWARD"
+   --                 , "OUTPUT"
+   --                 , "POSTROUTING"
+   --                 ]
 
    filter_chains = [ "INPUT"
                    , "FORWARD"
@@ -204,7 +195,6 @@ parse str =
 -- | @insertAcceptRulesIntoChains d s@. Rules in @s@ must not have a jump
 -- target or have the target ACCEPT for the semantics of d to be
 -- preserved. Assumes rules from @s@ are not already in @d@.
-
 
 type TCCAList r = TAList (CAList ISPolicy, CAList r)
 
