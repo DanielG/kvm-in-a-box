@@ -5,6 +5,7 @@ import Options.Applicative.Types
 import Data.Word
 import Data.Maybe
 import Data.Monoid
+import Data.List.Split
 import qualified Data.Set as Set
 
 import Types
@@ -33,16 +34,20 @@ parseIntegralSafe str =
       Right x -> return x
       Left err -> readerError err
 
-portOptionP :: Mod OptionFields Word16 -> Parser Word16
-portOptionP = option $ parseIntegralSafe =<< readerAsk
+portOptionP :: Mod OptionFields (Proto, Word16) -> Parser (Proto, Word16)
+portOptionP = option $ do
+  str <- readerAsk
+  case splitOn ":" str of
+    [mkProto -> proto, port] -> (proto,) <$> parseIntegralSafe port
+    _ -> readerError "portOptionP: expecting format 'PROTO:PORT'"
 
-portTupOptionP :: Mod OptionFields (Word16, Word16) -> Parser (Word16, Word16)
+portTupOptionP :: Mod OptionFields (Proto, (Word16, Word16)) -> Parser (Proto, (Word16, Word16))
 portTupOptionP = option $ do
   str <- readerAsk
-  case span (/=':') str of
-    (intern, ':':extern) ->
-        (,) <$> parseIntegralSafe intern <*> parseIntegralSafe extern
-    _ -> readerError "portOptionP: expecting format 'IPORT:EPORT'"
+  case splitOn ":" str of
+    [mkProto -> proto, intern, extern] ->
+        (proto,) <$> ((,) <$> parseIntegralSafe intern <*> parseIntegralSafe extern)
+    _ -> readerError "portTupOptionP: expecting format 'PROTO:IPORT:EPORT'"
 
 defaultOpt x f = fromMaybe x <$> optional f
 
@@ -81,12 +86,12 @@ vmNetCfgP = VmNetCfgFlags
 
      <*> optional $$ many $$ portTupOptionP $$
                  long "forward4"
-            <<>> metavar "IPORT:EPORT"
+            <<>> metavar "PROTO:IPORT:EPORT"
             <<>> help "NAT port forwarding IPORT at VM, EPORT from beyond the firewall"
 
      <*> optional $$ many $$ portOptionP $$
                  long "open6"
-            <<>> metavar "PORT"
+            <<>> metavar "PROTO:PORT"
             <<>> help "Open a port on the v6 firewall"
 
 

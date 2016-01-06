@@ -39,6 +39,20 @@ type VmName = String
 newtype Interface = Iface String deriving (Eq, Show)
 type GroupInterface = String
 
+data IPv = IPvv4 | IPvv6 deriving (Eq, Ord, Read, Show, Generic)
+data Proto = UDP | TCP deriving (Eq, Ord, Read, Show, Generic)
+
+instance NFData IPv
+instance NFData Proto
+
+mkProto :: String -> Proto
+mkProto str | "udp" <- map toLower str = UDP
+mkProto str | "tcp" <- map toLower str = TCP
+
+unProto :: Proto -> String
+unProto UDP = "udp"
+unProto TCP = "tcp"
+
 mkIface ifn =
     if all (\c -> isAlphaNum c || c == '-') ifn
        then Iface ifn
@@ -76,8 +90,8 @@ flagTH [d|
        vPublicIf  :: Bool,
        vPrivateIf :: Bool,
        vGroupIfs  :: Set GroupInterface,
-       vForwardedPorts4 :: [(Word16, Word16)],
-       vOpenPorts6 :: [Word16] -- TODO
+       vForwardedPorts4 :: [(Proto, (Word16, Word16))],
+       vOpenPorts6 :: [(Proto, Word16)] -- TODO
      } deriving (Eq, Ord, Show, Read, Generic)
  |]
 
@@ -153,6 +167,7 @@ deriveJSON jsonOpts ''VmCfg
 deriveJSON jsonOpts ''VmSysCfg
 deriveJSON jsonOpts ''VmNetCfg
 deriveJSON jsonOpts ''VmQCfg
+deriveJSON jsonOpts ''Proto
 
 instance FromJSON MAC where
     parseJSON (String v) = maybe (fail "FromJSON MAC") return $ Just $ readMAC $ unpack v

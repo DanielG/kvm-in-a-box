@@ -7,6 +7,7 @@ import Control.Applicative ((<$>), (<*>), (<*), (*>))
 import Control.Monad
 import Control.Arrow
 import Control.Exception.Base
+import Data.IP
 import Data.Bool
 import Data.Function
 import Data.Data
@@ -15,11 +16,13 @@ import Data.List
 import Data.List.Split
 import Data.Maybe
 import Data.Map (Map)
+import qualified Data.Map as Map
+import Data.Set (Set)
+import qualified Data.Set as Set
 import Data.Word
 import Data.Either
 -- import Data.Witherable (wither)
 import Data.Bifunctor hiding (first, second)
-import qualified Data.Map as Map
 import Text.Parsec hiding (parse)
 import Text.Parsec.Char
 import Text.Parsec.Prim hiding (parse)
@@ -34,6 +37,8 @@ import Resource
 import Utils
 import Files
 import Types
+import MAC
+import IP
 
 data IptablesSave r = IptablesSave {
       isComments :: [Maybe String]
@@ -80,47 +85,76 @@ instance FromOwned (IS r) where
 newtype IS r = IS { unIS :: IptablesSave [r] }
     deriving (Functor)
 
-ip6tablesResource :: VmNetCfg -> Resource
-ip6tablesResource _ = FileResource {
-    rNormalize = id, --unparse . parse,
-    rPath = etcdir </> "iptables/rules.v6",
-    rParse = markOurs . IS . parse,
-    rUnparse = unparse . unIS,
-    rContentFunc = markOurs . updateIS . fmap disown
-  }
--- markOurs . ( _ :: Maybe (IptablesSave [(ResourceOwner, ISRule)]) -> IptablesSave [(ResourceOwner, ISRule)]) . fmap disown
+iptablesResource :: Config -> Interface -> [Vm] -> Map VmName (MAC, IPv4) -> Resource
+iptablesResource cfg pubif vms hosts =
+    ManyResources [ table IPvv4, table IPvv6 ]
 
-           -- $ fromMaybe (IptablesSave [] []) mois
+ where
+   table ipv = FileResource {
+                 rNormalize = id, --unparse . parse,
+                 rPath = etcdir </> ("iptables/rules." ++ sipv),
+                 rPerms = ((Just "root", Just "root"), Just "7755"),
+                 rParse = markOurs . IS . parse,
+                 rUnparse = unparse . unIS,
+                 rContentFunc = markOurs . updateIS . fmap disown
+               }
+       where
+         sipv = case ipv of IPvv4 -> "v4"; IPvv6 -> "v6"
+         updateIS :: Maybe (IS ISRule) -> IS ISRule
+         updateIS =
+           IS . updateTables ipv cfg pubif vms hosts . fromMaybe (IptablesSave [] defaultTables) . fmap unIS
 
--- IptablesSave $
---         updateISSTable "filter" (fromMaybe [] $ unIptablesSave <$> mis) $
---             Map.insert "KIB_INPUT" kib_input
---           . flip insertAcceptRulesIntoChains redir
---           . map removeKib
--- }
--- where
+updateTables :: IPv
+             -> Config
+             -> Interface
+             -> [Vm]
+             -> Map VmName (MAC, IPv4)
+             -> IptablesSave [ISRule]
+             -> IptablesSave [ISRule]
+updateTables ipv Config {..} pubif vms hosts = insertKib . removeKib
+ where
+  insertKib :: IptablesSave [ISRule] -> IptablesSave [ISRule]
+  insertKib = insertKibJumps . insertKibChains
 
-updateIS :: Maybe (IS ISRule) -> IS ISRule
-updateIS =
-    IS . updateTables . fromMaybe (IptablesSave [] defaultTables) . fmap unIS
+  insertKibJumps :: IptablesSave [ISRule] -> IptablesSave [ISRule]
+  insertKibJumps = flip insertAcceptRulesIntoTables jumpTable
 
-updateTables :: IptablesSave [ISRule] -> IptablesSave [ISRule]
-updateTables = insertKib . removeKib
+  jumpTable :: TCAList [ISRule]
+  jumpTable = map (second snd) $ defaultTables' jumpPolicy jumpRule
+    where
+      jumpRule c = (c, [["-A", c, "-j", "KIB_" ++ c]])
+      jumpPolicy _ = Nothing
 
-insertKib :: IptablesSave [ISRule] -> IptablesSave [ISRule]
-insertKib = insertKibJumps . insertKibChains
+  insertKibChains :: IptablesSave [ISRule] -> IptablesSave [ISRule]
+  insertKibChains = case ipv of
+    IPvv4 -> flip replaceOrInsertChain $ [
+        ("nat",    [ ("KIB_PREROUTING", prerouting_chain "KIB_PREROUTING")
+                   , ("KIB_POSTROUTING", [[ "-A", "KIB_POSTROUTING", "-s", "10.0.0.0/16", "-o", cInterface, "-j", "MASQUERADE" ]])
+                   ]),
+        ("filter", [("KIB_FORWARD", forwards_chain "KIB_FORWARD")])
+      ]
+    IPvv6 -> flip replaceOrInsertChain $ [
+        ("filter", [("KIB_FORWARD", forwards_chain "KIB_FORWARD")])
+      ]
 
-insertKibJumps :: IptablesSave [ISRule] -> IptablesSave [ISRule]
-insertKibJumps = flip insertAcceptRulesIntoTables jumpTable
+  prerouting_chain :: String -> [ISRule]
+  prerouting_chain chain = flip concatMap vms $ \Vm { vNetCfg = VmNetCfg {..}, .. } ->
+    flip map vForwardedPorts4 $ \(unProto -> proto, (iport,eport)) -> let
+        Just ip = snd <$> Map.lookup vName hosts
+      in
+        [ "-A", chain, "-i", cInterface, "-p", proto, "-m", proto, "--dport", show eport
+        , "-j", "DNAT", "--to-destination", showIP ip ++ ":" ++ show iport ]
 
-jumpTable :: TCAList [ISRule]
-jumpTable = map (second snd) $ defaultTables' jumpPolicy jumpRule
-  where
-    jumpRule c = (c, [["-A", c, "-j", "KIB_" ++ c]])
-    jumpPolicy _ = Nothing
+  forwards_chain :: String -> [ISRule]
+  forwards_chain chain = flip map forwards $ \(inif, outif) ->
+    [ "-A", chain, "-i", inif, "-o", outif, "-j", "ACCEPT" ]
 
-insertKibChains :: IptablesSave [ISRule] -> IptablesSave [ISRule]
-insertKibChains = id
+  forwards :: [(String, String)]
+  forwards = flip concatMap vms $ \Vm { vName, vNetCfg } -> [
+               (cInterface, unIface pubif)
+             , (unIface pubif, cInterface)
+             ]
+
 
 defaultTables = defaultTables' accept empty
  where
@@ -151,6 +185,7 @@ defaultTables' pf rf =
    nat_chains    = [ "INPUT"
                    , "OUTPUT"
                    , "POSTROUTING"
+                   , "PREROUTING"
                    ]
 
    -- mangle_chains = [ "PREROUTING"
@@ -198,9 +233,13 @@ parse str =
 
 type TCCAList r = TAList (CAList ISPolicy, CAList r)
 
+replaceOrInsertChain :: IptablesSave [ISRule] -> TCAList [ISRule] -> IptablesSave [ISRule]
+replaceOrInsertChain (IptablesSave cs ts) tcal = IptablesSave cs $
+    unionAListWith (\(ps, cs) (_, cs') -> (ps, unionAListWith (\c c' -> c') cs cs')) ts (map (second ([],)) tcal)
+
 replaceOrInsertChains :: IptablesSave [ISRule] -> TCAList [ISRule] -> IptablesSave [ISRule]
-replaceOrInsertChains (IptablesSave cs ts) tcal =
-    IptablesSave cs $ unionAListWith (\(ps, cs) (_, cs') -> (ps, cs')) ts (map (second ([],)) tcal)
+replaceOrInsertChains (IptablesSave cs ts) tcal = IptablesSave cs $
+    unionAListWith (\(ps, cs) (_, cs') -> (ps, cs')) ts (map (second ([],)) tcal)
 
 -- (second (unionAListWith (++)))
 

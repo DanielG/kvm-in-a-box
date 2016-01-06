@@ -136,6 +136,7 @@ resources cfg@Config {..} Options {..} kibGrp hosts vms = do
                            , mkSystemdR hosts
                            , dnsmasqR
                            , lvmOwnerResources $ Map.elems vms
+                           , iptablesResource cfg (mkIface "kipubr") (Map.elems vms) (Map.fromList hosts)
                            ]
  where
    vmns = Map.keys vms
@@ -203,7 +204,9 @@ ensure cfg@Config {..} opts@Options {..} vms = do
 
     swallow $ ensureResource oRoot rs
 
-    unlessTesting $ void $ system "systemctl daemon-reload"
+    unlessTesting $ do
+      void $ system "systemctl daemon-reload"
+      void $ system "/etc/init.d/netfilter-persistent reload"
 
     return $ Map.fromList hosts
 
