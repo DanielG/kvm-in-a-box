@@ -24,6 +24,7 @@ import FlagTH
 
 import MAC
 import IP
+import JSON
 
 data Config = Config {
       cDomain    :: String,
@@ -146,14 +147,19 @@ instance NFData VmSysCfg
 instance NFData VmNetCfg
 instance NFData VmQCfg
 
-deriveJSON defaultOptions ''State
-deriveJSON defaultOptions ''IP
-deriveJSON defaultOptions ''MAC
-deriveJSON defaultOptions ''Vm
-deriveJSON defaultOptions ''VmCfg
-deriveJSON defaultOptions ''VmSysCfg
-deriveJSON defaultOptions ''VmNetCfg
-deriveJSON defaultOptions ''VmQCfg
+deriveJSON jsonOpts ''State
+deriveJSON jsonOpts ''Vm
+deriveJSON jsonOpts ''VmCfg
+deriveJSON jsonOpts ''VmSysCfg
+deriveJSON jsonOpts ''VmNetCfg
+deriveJSON jsonOpts ''VmQCfg
+
+instance FromJSON MAC where
+    parseJSON (String v) = maybe (fail "FromJSON MAC") return $ Just $ readMAC $ unpack v
+    parseJSON _          = mzero
+
+instance ToJSON MAC where
+    toJSON mac = String $ pack $ show mac
 
 instance FromJSON IPv4 where
     parseJSON (String v) = maybe (fail "FromJSON IPv4") return $ readMaybe $ unpack v

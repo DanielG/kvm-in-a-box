@@ -63,9 +63,15 @@ main = do
 
     (rv, diff, err)  <- readProcessWithExitCode "git" ["diff", "--no-index", "--color", "--word-diff=color", "--", e, i] ""
 
+    (rv', diff', err')  <- readProcessWithExitCode "git" ["diff", "--no-index", "--", e, i] ""
+
+
     case rv of
       ExitSuccess -> return True
       ExitFailure _ -> do
+              let [_, g, t] = splitDirectories test_dir
+              createDirectoryIfMissing True "diffs"
+              writeFile ("diffs" </> (g ++ "; " ++ t) <.> "diff") diff'
               putStrLn diff
               putStrLn ""
               return False

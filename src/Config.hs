@@ -1,8 +1,13 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Config where
 
 import Safe
 import Control.Applicative
 import Data.Char
+import Data.Aeson
+import Data.Maybe
+import qualified Data.ByteString.Lazy as LBS
+import qualified Data.ByteString.Lazy.Char8 as LBS8
 import qualified Data.SConfig as SC
 import System.Directory
 import System.FilePath
@@ -33,14 +38,16 @@ readState opts = do
   e <- doesFileExist file
   if not e
     then return defState
-    else readNote "state" . head . drop 1 . lines <$> readFile file
+    else do
+      (_hdr:state:_) <- LBS8.lines <$> LBS.readFile file
+      return $ either (error . (++) "parsing state: ") id $ eitherDecode state
 
 writeState :: Options -> State -> IO ()
 writeState opts s = do
     let f = rootRel (oRoot opts) stateFile
     createDirectoryIfMissing True (takeDirectory f)
-    writeFile' f $
-      "kvm-in-a-box state format: v3\n" ++ show s ++ "\n"
+    writeFile'LBS f $ LBS.concat
+      [ "kvm-in-a-box state format: v3\n", encode s, "\n" ]
 
 modifyState opts f = do
   s <- readState opts

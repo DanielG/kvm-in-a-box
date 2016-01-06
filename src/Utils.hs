@@ -7,6 +7,7 @@ import Data.Bool
 import Data.List
 import Data.Char
 import Data.Either
+import qualified Data.ByteString.Lazy as LBS
 import Data.Bifunctor (Bifunctor, bimap)
 import Data.Functor.Identity
 import qualified Data.Map as Map
@@ -35,6 +36,16 @@ callProcess :: Maybe FilePath -> FilePath -> [String] -> IO ExitCode
 callProcess mwd exe args = do
   (_, _, _, h) <- createProcess (proc exe args) { cwd = mwd }
   waitForProcess h
+
+writeFile'LBS f c = writeFile''LBS f Nothing c
+
+writeFile''LBS f mpe c = do
+     withTempFile (takeDirectory f) (takeFileName f) $ \tf h -> do
+         LBS.hPutStr h c
+         hClose h
+         unlessTesting $ maybe (return ()) (setPerms tf) mpe
+         renameFile tf f
+
 
 writeFile' f c = writeFile'' f Nothing c
 

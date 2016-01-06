@@ -1,7 +1,8 @@
-module MAC where
+module MAC (MAC, enumerateMACs, showMAC, readMAC, nullMAC) where
 
 import GHC.Generics
 import Control.DeepSeq
+import Control.Arrow
 import Numeric
 import Data.Bits
 import Data.Word
@@ -12,7 +13,13 @@ import Data.Function
 import BitUtils
 
 newtype MAC = MAC [Word8]
-    deriving (Eq, Ord, Show, Read, Generic)
+    deriving (Eq, Ord, Generic)
+
+instance Show MAC where
+    show = showMAC
+
+instance Read MAC where
+    readsPrec i = \s -> map (first readMAC) $ (readsPrec i :: ReadS String) s
 
 instance NFData MAC
 

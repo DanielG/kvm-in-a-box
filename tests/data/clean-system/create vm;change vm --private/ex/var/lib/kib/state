@@ -1,2 +1,2 @@
-kvm-in-a-box state format: v2
-State {sVms = fromList [("vm",Vm {vName = "vm", vSS = VmSS {vVg = "vg0"}, vVS = VmVS {vCpus = 1, vMem = 512, vArch = "x86_64", vUserIf = False, vPublicIf = False, vPrivateIf = True, vGroupIfs = fromList []}})], sNet = fromList [("vm",(MAC [2,0,0,0,0,1],10.0.0.2))]}
+kvm-in-a-box state format: v3
+{"net":{"vm":["02:00:00:00:00:01","10.0.0.2"]},"vms":{"vm":{"sys_cfg":{"vg":"vg0","authorized_keys":[]},"q_cfg":{"mem":512,"cpus":1},"name":"vm","cfg":{"arch":"x86_64"},"net_cfg":{"group_ifs":[],"private_if":true,"forwarded_ports4":[],"user_if":false,"open_ports6":[],"public_if":false}}}}
