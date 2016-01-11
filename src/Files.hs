@@ -10,7 +10,7 @@ stateFile = varlibdir </> "state"
 rootRel root path = root </> makeRelative "/" path
 
 homedir = "/home"
-varrundir = "/var/run/"
+varrundir uid = "/run/user" </> show uid
 varlibdir = "/var/lib/kib/"
 etcdir = "/etc"
 usrsharedir = "/usr/share/kib"

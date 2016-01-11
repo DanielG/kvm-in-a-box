@@ -3,13 +3,14 @@
     DeriveDataTypeable, DeriveFunctor #-}
 module Iptables where
 
-import Control.Applicative ((<$>), (<*>), (<*), (*>))
+import Control.Applicative (Applicative, (<$>), (<*>), (<*), (*>), (<$))
 import Control.Monad
 import Control.Arrow
 import Control.Exception.Base
 import Data.IP
 import Data.Bool
 import Data.Function
+import Data.Traversable (traverse)
 import Data.Data
 import Data.Char
 import Data.List
@@ -40,14 +41,16 @@ import Types
 import MAC
 import IP
 
+type Tables r = TAList (CAList ISPolicy, CAList r)
+
 data IptablesSave r = IptablesSave {
       isComments :: [Maybe String]
-    , isTables   :: TAList (CAList ISPolicy, CAList r)
+    , isTables   :: Tables r
     }
-    deriving (Eq, Show, Data, Functor)
+    deriving (Eq, Show, Data, Functor, Typeable)
 
 data ISPolicy = ISP (Maybe String) Integer Integer
-    deriving (Eq, Show, Data)
+    deriving (Eq, Show, Data, Typeable)
 
 type ISRule = [String]
 
@@ -119,11 +122,17 @@ updateTables ipv Config {..} pubif vms hosts = insertKib . removeKib
   insertKibJumps :: IptablesSave [ISRule] -> IptablesSave [ISRule]
   insertKibJumps = flip insertAcceptRulesIntoTables jumpTable
 
-  jumpTable :: TCAList [ISRule]
-  jumpTable = map (second snd) $ defaultTables' jumpPolicy jumpRule
+  jumpTable :: Tables [ISRule]
+  jumpTable = defaultTables' jumpPolicy jumpRule
     where
       jumpRule c = (c, [["-A", c, "-j", "KIB_" ++ c]])
-      jumpPolicy _ = Nothing
+      jumpPolicy c = Just ("KIB_" ++ c, ISP Nothing 0 0)
+
+  -- insertKibChainPolicies :: IptablesSave [ISRule] -> IptablesSave [ISRule]
+  -- insertKibChainPolicies = flip replaceOrInsertPolicy $
+  --   where
+  --     jumpRule c = ("KIB_" ++ c, [])
+  --     jumpPolicy c = ("KIB_" ++ c, Just $ ISP Nothing 0 0)
 
   insertKibChains :: IptablesSave [ISRule] -> IptablesSave [ISRule]
   insertKibChains = case ipv of
@@ -131,7 +140,9 @@ updateTables ipv Config {..} pubif vms hosts = insertKib . removeKib
         ("nat",    [ ("KIB_PREROUTING", prerouting_chain "KIB_PREROUTING")
                    , ("KIB_POSTROUTING", [[ "-A", "KIB_POSTROUTING", "-s", "10.0.0.0/16", "-o", cInterface, "-j", "MASQUERADE" ]])
                    ]),
-        ("filter", [("KIB_FORWARD", forwards_chain "KIB_FORWARD")])
+        ("filter", [ ("KIB_FORWARD", forwards_chain "KIB_FORWARD")
+                   , ("KIB_INPUT", input_chain "KIB_INPUT")
+                   ])
       ]
     IPvv6 -> flip replaceOrInsertChain $ [
         ("filter", [("KIB_FORWARD", forwards_chain "KIB_FORWARD")])
@@ -150,11 +161,25 @@ updateTables ipv Config {..} pubif vms hosts = insertKib . removeKib
     [ "-A", chain, "-i", inif, "-o", outif, "-j", "ACCEPT" ]
 
   forwards :: [(String, String)]
-  forwards = flip concatMap vms $ \Vm { vName, vNetCfg } -> [
-               (cInterface, unIface pubif)
+  forwards = [ (cInterface, unIface pubif)
              , (unIface pubif, cInterface)
              ]
 
+  input_chain :: String -> [ISRule]
+  input_chain chain = zipWith (input_rule chain) (repeat (unIface pubif)) inputs_from_pub
+
+  input_rule chain iface (unProto -> proto, port) =
+    [ "-A", chain
+    , "-i", iface
+    , "-p", proto, "-m", proto
+    , "--dport", show port
+    , "-j", "ACCEPT"
+    ]
+
+  inputs_from_pub :: [(Proto, String)]
+  inputs_from_pub = [ (UDP, "67:68")
+                    , (UDP, "53")
+                    ]
 
 defaultTables = defaultTables' accept empty
  where
@@ -164,7 +189,7 @@ defaultTables = defaultTables' accept empty
 
 defaultTables' :: (String -> Maybe (Chain, ISPolicy))
                -> (String -> (Chain, [r]))
-               -> TAList (CAList ISPolicy, CAList [r])
+               -> Tables [r]
 defaultTables' pf rf =
     [ ("nat"   , ( mapMaybe pf nat_chains
                  , map rf  nat_chains
@@ -231,7 +256,9 @@ parse str =
 -- target or have the target ACCEPT for the semantics of d to be
 -- preserved. Assumes rules from @s@ are not already in @d@.
 
-type TCCAList r = TAList (CAList ISPolicy, CAList r)
+replaceOrInsertPolicy :: IptablesSave [ISRule] -> TCAList ISPolicy -> IptablesSave [ISRule]
+replaceOrInsertPolicy (IptablesSave cs ts) tcal = IptablesSave cs $
+    unionAListWith (\(ps, _) (ps', _) -> (unionAListWith (\p p' -> p') ps ps', [])) ts (map (second (,[])) tcal)
 
 replaceOrInsertChain :: IptablesSave [ISRule] -> TCAList [ISRule] -> IptablesSave [ISRule]
 replaceOrInsertChain (IptablesSave cs ts) tcal = IptablesSave cs $
@@ -270,9 +297,9 @@ prop_replaceOrInsertChains2 =
                          ]
 
 insertAcceptRulesIntoTables
-    :: IptablesSave [ISRule] -> TCAList [ISRule] -> IptablesSave [ISRule]
-insertAcceptRulesIntoTables (IptablesSave ps ts) ts' =
-    IptablesSave ps $ unionAListWith (\(ps, cs) (ps', cs') -> (ps, insertAcceptRulesIntoChains cs cs')) ts (map (second ([],)) ts')
+    :: IptablesSave [ISRule] -> Tables [ISRule] -> IptablesSave [ISRule]
+insertAcceptRulesIntoTables (IptablesSave cs ts) ts' =
+    IptablesSave cs $ unionAListWith (\(ps, cs) (ps', cs') -> (unionAListWith (\p p' -> p') ps ps', insertAcceptRulesIntoChains cs cs')) ts ts'
 
 prop_insertAcceptRulesIntoTables :: Bool
 prop_insertAcceptRulesIntoTables =
@@ -286,7 +313,7 @@ prop_insertAcceptRulesIntoTables =
          ["-A", "INPUT", "-j", "REJECT"]
         ]
 
-   c2 = (:[]) $ ("filter",) $ (:[]) $ (,) "INPUT" $ [
+   c2 = (:[]) $ ("filter",) $ ([],) $ (:[]) $ (,) "INPUT" $ [
          ["-A", "INPUT", "-j", "KIB_INPUT"]
         ]
 
@@ -353,7 +380,7 @@ unparse :: IptablesSave [ISRule] -> String
 unparse (IptablesSave mcs ts) =
     unlines $ concatMap (either goCM (concatMap goT)) $ unmpartition mcs $ map (:[]) ts
  where
-   goCM s = [s]
+   goCM s = lines s
 
    goT :: (Table, (CAList ISPolicy, CAList [ISRule])) -> [String]
    goT (tn, (ps, cs)) = concat
@@ -373,22 +400,22 @@ unparse (IptablesSave mcs ts) =
 parseIptablesSave :: Parsec String u (IptablesSave [ISRule])
 parseIptablesSave = do
     let
-        parseTable :: Parsec String u (TAList (CAList ISPolicy, CAList [ISRule]))
+        parseTable :: Parsec String u (Tables [ISRule])
         parseTable = do
           tn <- parseTableHead
           ps <- parsePolicies
           rs <- parseRules
           return [(tn, (ps, rs))]
 
-    ects :: [Either String (TAList (CAList ISPolicy, CAList [ISRule]))]
+    ects :: [Either String (Tables [ISRule])]
        <- many (  (Left  <$> parseComments)
               <|> (Right <$> parseTable)
                )
     let
         mcs :: [Maybe String]
-        ts  :: [(TAList (CAList ISPolicy, CAList [ISRule]))]
+        ts  :: [Tables [ISRule]]
         (mcs, ts) = mpartition ects
-        ts' :: TAList (CAList ISPolicy, CAList [ISRule])
+        ts' :: Tables [ISRule]
         ts' = unionsAList ts
 
     return $ IptablesSave mcs ts'
@@ -398,7 +425,7 @@ twace l a = trace (l ++ ": " ++ show a) a
 
 
 parseComments = concat <$> many1
-  (char '#' *> (('#':) <$> many nonNewline) <* newline)
+  (char '#' *> ((++"\n") . ('#':) <$> many nonNewline) <* newline)
 
 parseTableHead :: Parsec String u String
 parseTableHead =

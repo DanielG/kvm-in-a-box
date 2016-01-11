@@ -34,29 +34,29 @@ interfaceResource br@(unIface -> brn) maddr addr6 vms amRoot = ManyResources $ [
    ifpf v = brn ++ "-" ++ v
 
    ifaceRes vm = IOResource {
-      rUpdateMsg = \(not_if_exists, if_down, not_bridge_iface) ->
+      rUpdateMsg = \(not_if_exists, if_down, bridge_iface) ->
         unlines $ execWriter $ do
           when not_if_exists $
             tell ["interface for VM '"++vm++"' doesn't exist, configuring"]
           when if_down $
             tell ["interface for VM '"++vm++"' down, upping"]
-          when not_bridge_iface $
+          when (not bridge_iface) $
             tell ["interface for VM '"++vm++"' not connected to bridge, connecting"],
 
-      rUpdate = \(not_if_exists, if_down, not_bridge_iface) -> do
+      rUpdate = \(not_if_exists, if_down, bridge_iface) -> do
         when not_if_exists $
           pro $ tapAdd i usr
         when if_down $
           pro $ setIfstate i (IfState "up")
-        when not_bridge_iface $
+        when (not bridge_iface) $
           pro $ brAddIf br i,
 
       rCheck = do
         not_if_exists <- not <$> ifexists i
         if_down <- (== Right (IfState "down"))
                      <$> tryJust (guard . isDoesNotExistError) (ifstate i)
-        not_bridge_iface <- (i `elem`) <$> brIfaces br
-        return (not_if_exists, if_down, not_bridge_iface)
+        bridge_iface <- (i `elem`) <$> brIfaces br
+        return (not_if_exists, if_down, bridge_iface)
       }
     where
       i = mkIface $ ifpf vm

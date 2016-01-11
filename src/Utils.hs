@@ -2,11 +2,14 @@ module Utils where
 
 import Control.Monad
 import Control.Arrow
+import Control.Applicative
 import Control.Exception
 import Data.Bool
 import Data.List
 import Data.Char
 import Data.Either
+import qualified Data.Foldable as F
+import qualified Data.Traversable as F
 import qualified Data.ByteString.Lazy as LBS
 import Data.Bifunctor (Bifunctor, bimap)
 import Data.Functor.Identity
@@ -21,6 +24,7 @@ import System.FilePath
 import System.Posix.User
 import System.Posix.Files
 import System.Posix.Types
+import Prelude
 
 pro (cmd:args) = do
   res <- callProcess Nothing cmd args
@@ -145,7 +149,7 @@ instance IxFoldable k (Map.Map k) where
     ifoldr = Map.foldrWithKey
 
 instance IxTraversable k (Map.Map k) where
-    itraverse f m = sequenceA $ Map.mapMaybeWithKey (\k a -> Just $ f k a) m
+    itraverse f m = F.sequenceA $ Map.mapMaybeWithKey (\k a -> Just $ f k a) m
 
 -- instance IxWitherable k (Map.Map k) where
 --     imapMaybe = Map.mapMaybeWithKey

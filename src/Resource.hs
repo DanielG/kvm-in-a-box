@@ -7,7 +7,6 @@ import Control.Exception
 import Control.Applicative
 import Control.Arrow
 import Data.List
-import Data.Proxy
 import Data.Maybe
 import System.IO
 import System.Directory
@@ -21,6 +20,8 @@ import Log
 import Utils
 import Files
 import Types
+
+data Proxy t = Proxy
 
 data ResourceOwner =
     OwnerVm VmName

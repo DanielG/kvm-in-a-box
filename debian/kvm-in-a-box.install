@@ -1,0 +1,2 @@
+dist-ghc/build/kib-supervise/kib-supervise usr/sbin
+dist-ghc/build/kib/kib usr/sbin

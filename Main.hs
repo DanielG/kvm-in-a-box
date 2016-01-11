@@ -108,11 +108,22 @@ authorize vmn key cfg opts s@State {sVms=sVms0} = do
 
       return s
 
+systemctl :: String -> VmName -> Config -> Options -> State -> IO State
+systemctl cmd vmn cfg opts s@State {..} =
+  case Map.lookup vmn sVms of
+    Nothing -> error $ "VM '"++vmn++"' does not exist."
+    Just _ -> do
+      let user = "kib-" ++ vmn
+      uid <- userID <$> getUserEntryForName user
+      pro [ "sudo", "-u", show uid, "XDG_RUNTIME_DIR=" ++ varrundir uid
+          , "systemctl", "--user", "start", user ]
+      return s
+
 start :: VmName -> Config -> Options -> State -> IO State
-start vmn cfg opts s@State {..} = error "TODO: systemctl start ..."
+start = systemctl "start"
 
 stop :: VmName -> Config -> Options -> State -> IO State
-stop = error "TODO: systemctl start ..."
+stop = systemctl "stop"
 
 console :: VmName -> Config -> Options -> State -> IO State
 console vmn cfg opts s@State {sVms=sVms0} = do
@@ -123,9 +134,10 @@ console vmn cfg opts s@State {sVms=sVms0} = do
       return s
 
 console' vmn = do
+  uid <- userID <$> getUserEntryForName ("kib-" ++ vmn)
   hPutStrLn stderr "Type RET to get a prompt (serial console)"
   hPutStrLn stderr "Type ^] (ASCII GS) to exit console."
-  pro [ "socat",  "STDIO,raw,echo=0,escape=0x1d",  "UNIX-CONNECT:" ++ (varrundir </> "kib-" ++ vmn </> "ttyS0.unix") ]
+  pro [ "socat",  "STDIO,raw,echo=0,escape=0x1d",  "UNIX-CONNECT:" ++ (varrundir uid </> "kib-" ++ vmn </> "ttyS0.unix") ]
 
 
 resources cfg@Config {..} Options {..} kibGrp hosts vms = do
@@ -168,11 +180,13 @@ resources cfg@Config {..} Options {..} kibGrp hosts vms = do
    mkSystemdR hosts = ManyResources
                   $ Map.elems
                   $ Map.mapWithKey vmInitResource
-                  $ Map.map (\(vm, (mac,_ip)) -> qemu varrundir (Qemu [] False vm) mac)
+                  $ Map.map (\(vm, (mac,_ip)) -> qemu "%t" (Qemu [] False vm) mac)
                   $ Map.intersectionWith (,) vms (Map.fromList hosts)
 
    dnsmasqR = ManyResources $
-       [vmDnsDhcpResource [(mkIface "kipubr"), (mkIface "kiprivbr")] cfg, vmHostLeaseResource cAddress vmns]
+       [ vmDnsDhcpResource (map mkIface ["kipubr", "kiprivbr"]) cfg
+       , vmHostLeaseResource cAddress vmns
+       ]
 
 listResources :: Config -> Options -> State -> IO State
 listResources cfg@Config {..} opts@Options {..} s@State { sVms=vms } = do
@@ -225,11 +239,6 @@ setup cfg opts s = do
     ensureResource (oRoot opts) sysctlResource
     return s
 
-setupIptables :: Config -> Options -> State -> IO State
-setupIptables cfg opts s = do
-    ensureResource (oRoot opts) undefined -- ip6tablesResource
-    return s
-
 commands :: Parser (Config -> Options -> State -> IO State)
 commands = subparser $ mconcat
   [
@@ -258,8 +267,8 @@ commands = subparser $ mconcat
   , command "create" $ withInfo "Create a new VM" $
       create <$> strArgument (metavar "name") <*> vmP
 
-  , command "destroy" $ withInfo "Destroy an existing VM" $
-      destroy <$> strArgument (metavar "NAME")
+  -- , command "destroy" $ withInfo "Destroy an existing VM" $
+  --     destroy <$> strArgument (metavar "NAME")
 
   , command "change" $ withInfo "Change an existing VM" $
       change <$> strArgument (metavar "NAME") <*> vmP
@@ -277,9 +286,6 @@ commands = subparser $ mconcat
   , command "setup" $ withInfo "Perform initial envirnment configuration" $
       pure setup
 
-  , command "setup-iptables" $ withInfo "Internal test command" $
-      pure setupIptables
-
   ]
 
 withInfo :: String -> Parser a -> ParserInfo a
@@ -294,9 +300,21 @@ adminConsole user = do
     [""] -> console' vmn
     ["console"] -> console' vmn
     ["reset"] -> do
-        pro [ "killall", "-SIGQUIT", "qemu-system-x86_64" ]
+        pro [ "systemctl", "--user", "restart", user ]
         threadDelay (500 * 1000)
         console' vmn
+    ["start"] -> do
+        pro [ "systemctl", "--user", "start", user ]
+        adminConsole user
+    ["stop"] -> do
+        pro [ "systemctl", "--user", "stop", user ]
+        adminConsole user
+    ["disable"] -> do
+        pro [ "systemctl", "--user", "disable", user ]
+        adminConsole user
+    ["enable"] -> do
+        pro [ "systemctl", "--user", "enable", user ]
+        adminConsole user
     "install":"debian":[] ->
         installDebian vmn Nothing
     "install":"debian":"auto":[] ->
@@ -320,8 +338,9 @@ installDebian vmn mfile = void $ do
     rawSystem "7z" ["-o"++tmp, "x", iso, "install.amd"]
     exists <- doesDirectoryExist $ tmp </> "install.amd"
     when (not exists) $ error "Extracting Debian installer kernel+inird failed"
+    uid <- userID <$> getUserEntryForName ("kib-" ++ vmn)
     let
-        cmd:args' = flip (qemu varrundir) undefined
+        cmd:args' = flip (qemu (varrundir uid)) undefined
                   $ Qemu [("tftp", tmp)] True
                   $ Vm vmn
                        defVmCfg
@@ -350,6 +369,10 @@ main = do
       putStrLn "Commands:"
       putStrLn "  > console"
       putStrLn "  > reset"
+      putStrLn "  > start"
+      putStrLn "  > stop"
+      putStrLn "  > enable"
+      putStrLn "  > disable"
       putStrLn "  > install debian auto"
       putStrLn "  > install debian [PRESEED_URL]"
       putStrLn ""

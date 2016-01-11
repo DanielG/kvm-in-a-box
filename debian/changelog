@@ -1,0 +1,5 @@
+kvm-in-a-box (0.1.0.0) jessie; urgency=low
+
+  * Initial release
+
+ -- Daniel Gröber <dxld@darkboxed.org>  Wed, 06 Jan 2016 20:54:56 +0100

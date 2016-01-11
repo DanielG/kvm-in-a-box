@@ -9,6 +9,7 @@ import Data.List.Split
 import qualified Data.Set as Set
 
 import Types
+import Read
 
 data Options = Options { oRoot :: FilePath, oQuiet :: Bool } deriving Show
 
@@ -17,7 +18,7 @@ exceptP (Left s)  = readerError s
 exceptP (Right a) = return a
 
 intOption :: Mod OptionFields Int -> Parser Int
-intOption = option auto
+intOption = option $ eitherReader $ (\str' -> readEither str')
 
 readIntegralSafe :: forall a. (Integral a, Read a, Bounded a) => String -> Either String a
 readIntegralSafe str = let
@@ -35,15 +36,13 @@ parseIntegralSafe str =
       Left err -> readerError err
 
 portOptionP :: Mod OptionFields (Proto, Word16) -> Parser (Proto, Word16)
-portOptionP = option $ do
-  str <- readerAsk
+portOptionP = option $ \str -> do
   case splitOn ":" str of
     [mkProto -> proto, port] -> (proto,) <$> parseIntegralSafe port
     _ -> readerError "portOptionP: expecting format 'PROTO:PORT'"
 
 portTupOptionP :: Mod OptionFields (Proto, (Word16, Word16)) -> Parser (Proto, (Word16, Word16))
-portTupOptionP = option $ do
-  str <- readerAsk
+portTupOptionP = option $ \str -> do
   case splitOn ":" str of
     [mkProto -> proto, intern, extern] ->
         (proto,) <$> ((,) <$> parseIntegralSafe intern <*> parseIntegralSafe extern)
