@@ -24,6 +24,14 @@ Build-Depends: debhelper (>= 9),
  libghc-unordered-containers-dev,
  libghc-uri-dev,
  libghc-doctest-dev,
+ bridge-utils,
+ iptables-persistent,
+ sgabios,
+ sudo,
+ qemu,
+ p7zip-full,
+ socat,
+ dnsmasq
 Standards-Version: 3.9.6
 
 Package: kvm-in-a-box

@@ -20,14 +20,14 @@ import Utils
 import MAC
 import IP
 
-vmDnsDhcpResource :: [Interface] -> Config -> Resource
+vmDnsDhcpResource :: [Interface] -> Config -> SomeResource
 vmDnsDhcpResource bridges cfg =
-  SimpleFileResource {
-    rPath = etcdir </> "dnsmasq.d/kib",
-    rPerms = ((Nothing, Nothing), Just "644"),
-    rOwner = OwnerKib,
-    rNormalize = id,
-    rContent =
+  SomeResource $ SimpleFileResource {
+    sfrPath = etcdir </> "dnsmasq.d/kib",
+    sfrPerms = ((Nothing, Nothing), Just "644"),
+    sfrOwner = OwnerKib,
+    sfrNormalize = id,
+    sfrContent =
        unlines $ [ "domain="++cDomain cfg
                  , "dhcp-hostsfile=/etc/dnsmasq.kib.hosts"
                  , "enable-ra"
@@ -36,9 +36,9 @@ vmDnsDhcpResource bridges cfg =
                  ((\(unIface -> ifn) -> "dhcp-range=::,constructor:"++ifn++",slaac") `map` bridges)
  }
 
-vmHostLeaseResource :: Address IPv4 -> [VmName] -> Resource
+vmHostLeaseResource :: Address IPv4 -> [VmName] -> SomeResource
 vmHostLeaseResource addr vmns =
-  FileResource {
+  SomeResource $ FileResource {
     rPath = kibHostsFile,
     rPerms = ((Nothing, Nothing), Just "644"),
     rNormalize = unparse . sort . parse,

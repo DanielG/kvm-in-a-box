@@ -33,6 +33,9 @@ pro (cmd:args) = do
     ExitFailure rv ->
         hPutStrLn stderr $ "command failed '" ++ intercalate " " (map prettyShow $ cmd:args) ++ "' (exit code "++ show rv ++")"
 
+pro_ (cmd:args) =
+  void $ callProcess Nothing cmd args
+
 prettyShow x | any isSpace x = show x
              | otherwise = x
 

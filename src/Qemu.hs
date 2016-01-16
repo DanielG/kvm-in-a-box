@@ -20,6 +20,7 @@ data Qemu = Qemu {
 
 qemu rundir Qemu { qVm = Vm { vName, vCfg = VmCfg {..}, vSysCfg = VmSysCfg {..}, vNetCfg = VmNetCfg {..}, vQCfg = VmQCfg {..} }, .. } mac = concat $ [
   [arch vArch],
+  ["-sandbox", "on"], -- seccomp yey
   ["-cpu", "host"],
   ["-machine", "pc,accel=kvm"],
   ["-nographic"],

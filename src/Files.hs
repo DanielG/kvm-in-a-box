@@ -13,4 +13,4 @@ homedir = "/home"
 varrundir uid = "/run/user" </> show uid
 varlibdir = "/var/lib/kib/"
 etcdir = "/etc"
-usrsharedir = "/usr/share/kib"
+usrsharedir = "/usr/share/kvm-in-a-box"

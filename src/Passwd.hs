@@ -47,9 +47,9 @@ data GroupEntry = GroupEntry {
       geUserList :: [String]
     } deriving (Show)
 
-passwdResource :: [VmName] -> PX.GroupEntry -> Resource
-passwdResource vmns kibGrp = ManyResources [
-  FileResource {
+passwdResource :: [VmName] -> PX.GroupEntry -> ManyResources
+passwdResource vmns kibGrp = ManyResources $ [
+  SomeResource $ FileResource {
     rPath = etcdir </> "passwd",
     rPerms = ((Nothing, Nothing), Just "644"),
     rNormalize =
@@ -60,7 +60,7 @@ passwdResource vmns kibGrp = ManyResources [
 
     rContentFunc = map markPwd . passwdDb vmns kibGrp . map snd . fromMaybe []
   },
-  FileResource {
+  SomeResource $ FileResource {
     rPath = etcdir </> "shadow",
     rPerms = ((Nothing, Nothing), Just "600"),
     rNormalize =
@@ -70,7 +70,7 @@ passwdResource vmns kibGrp = ManyResources [
 
     rContentFunc = map markShd . shadowDb vmns . map snd . fromMaybe []
   },
-  FileResource {
+  SomeResource $ FileResource {
     rPath = etcdir </> "group",
     rPerms = ((Nothing, Nothing), Just "644"),
     -- TODO: filter out kib users from group members
@@ -81,14 +81,14 @@ passwdResource vmns kibGrp = ManyResources [
 
     rContentFunc = map markGrp . groupDb vmns . map snd . fromMaybe []
   }
-  , ManyResources $ map homeDirectoryResource vmns
- ]
+ ] ++ map homeDirectoryResource vmns
 
+homeDirectoryResource :: VmName -> SomeResource
 homeDirectoryResource vmn =
-    DirectoryResource {
-      rPath = homedir </> "kib-" ++ vmn,
-      rPerms = ((Just $ "kib-" ++ vmn, Just "kib"), Just "755"),
-      rOwner = OwnerKib
+    SomeResource $ DirectoryResource {
+      fmrPath = homedir </> "kib-" ++ vmn,
+      fmrPerms = ((Just $ "kib-" ++ vmn, Just "kib"), Just "755"),
+      fmrOwner = OwnerKib
     }
 
 markPwd x

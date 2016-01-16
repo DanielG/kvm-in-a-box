@@ -20,20 +20,20 @@ import Utils
 import Files
 import IP
 
-interfaceResource :: Interface -> Maybe (Address IPv4) -> Address IPv6 -> [VmName] -> Bool -> Resource
+interfaceResource :: Interface -> Maybe (Address IPv4) -> Address IPv6 -> [VmName] -> Bool -> ManyResources
 interfaceResource br@(unIface -> brn) maddr addr6 vms amRoot = ManyResources $ [
-    SimpleFileResource {
-      rPath = etcdir </> "network/interfaces.d/"++brn,
-      rPerms = ((Nothing, Nothing), Just "644"),
-      rNormalize = unlines . concatMap ifupdownNormalize . lines,
-      rContent = brdef brn addr6 vms $ fromMaybe [] $ net <$> maddr,
-      rOwner = OwnerKib
+    SomeResource $ SimpleFileResource {
+      sfrPath = etcdir </> "network/interfaces.d/"++brn,
+      sfrPerms = ((Nothing, Nothing), Just "644"),
+      sfrNormalize = unlines . concatMap ifupdownNormalize . lines,
+      sfrContent = brdef brn addr6 vms $ fromMaybe [] $ net <$> maddr,
+      sfrOwner = OwnerKib
     } ] ++ if amRoot then map ifaceRes vms else []
 
  where
    ifpf v = brn ++ "-" ++ v
 
-   ifaceRes vm = IOResource {
+   ifaceRes vm = SomeResource $ IOResource {
       rUpdateMsg = \(not_if_exists, if_down, bridge_iface) ->
         unlines $ execWriter $ do
           when not_if_exists $
@@ -122,7 +122,7 @@ modIpv6 action (unIface -> ifname) iprange6 =
 ifstate :: Interface -> IO IfState
 ifstate (unIface -> ifname) = do
   s <- readFile $ "/sys/class/net/"++ifname++"/operstate"
-  return $ case s of
+  return $ case takeWhile isAlphaNum s of
     "up" -> IfState "up"
     _    -> IfState "down"
 

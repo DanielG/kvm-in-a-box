@@ -18,8 +18,8 @@ import Resource
 import Files
 import ParserUtils
 
-sshdResource :: Resource
-sshdResource = FileResource {
+sshdResource :: SomeResource
+sshdResource = SomeResource $ FileResource {
     rNormalize = \str -> concatMap unparse $ filter isOurs $ parse str,
     rPath = etcdir </> "ssh/sshd_config",
     rPerms = ((Nothing, Nothing), Just "644"),
@@ -44,16 +44,16 @@ addOrReplace p x l = nubBy (both p) $ map (replace p x) l ++ [x]
 cf = addOrReplace (isOurs . snd) (OwnerKib, cfg) . fromMaybe []
 
 -- test_sshdResource :: Bool
-test_sshdResource = case sshdResource of
-  FileResource {..} -> let
-      p0 :: Owned [SshCfgDir]
-      p2 :: Owned [SshCfgDir]
+-- test_sshdResource = case sshdResource of
+--   FileResource {..} -> let
+--       p0 :: Owned [SshCfgDir]
+--       p2 :: Owned [SshCfgDir]
 
-      p0 = unsafeCoerce $ rContentFunc $ Nothing
-      p2 = unsafeCoerce $ rContentFunc $ Just $ rParse src1
-    in
-      -- p0 == p2
-      (p0, p2)
+--       p0 = unsafeCoerce $ rContentFunc $ Nothing
+--       p2 = unsafeCoerce $ rContentFunc $ Just $ rParse src1
+--     in
+--       -- p0 == p2
+--       (p0, p2)
 
 
 src0 = "Hello World\n"

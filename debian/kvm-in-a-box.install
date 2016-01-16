@@ -1,2 +1,3 @@
 dist-ghc/build/kib-supervise/kib-supervise usr/sbin
 dist-ghc/build/kib/kib usr/sbin
+preseed.cfg usr/share/kvm-in-a-box

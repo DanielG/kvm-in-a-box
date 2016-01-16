@@ -88,12 +88,12 @@ instance FromOwned (IS r) where
 newtype IS r = IS { unIS :: IptablesSave [r] }
     deriving (Functor)
 
-iptablesResource :: Config -> Interface -> [Vm] -> Map VmName (MAC, IPv4) -> Resource
+iptablesResource :: Config -> Interface -> [Vm] -> Map VmName (MAC, IPv4) -> ManyResources
 iptablesResource cfg pubif vms hosts =
     ManyResources [ table IPvv4, table IPvv6 ]
 
  where
-   table ipv = FileResource {
+   table ipv = SomeResource $ FileResource {
                  rNormalize = id, --unparse . parse,
                  rPath = etcdir </> ("iptables/rules." ++ sipv),
                  rPerms = ((Just "root", Just "root"), Just "7755"),

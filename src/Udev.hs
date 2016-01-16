@@ -6,8 +6,8 @@ import Data.List
 import Data.List.Split
 import Data.Maybe
 
-lvmOwnerResources :: [Vm] -> Resource
-lvmOwnerResources vms = FileResource {
+lvmOwnerResources :: [Vm] -> SomeResource
+lvmOwnerResources vms = SomeResource $ FileResource {
     rPath = "/etc/udev/rules.d/99-kib.rules",
     rPerms = ((Nothing, Nothing), Just "644"),
     rNormalize = unlines . sort . lines,

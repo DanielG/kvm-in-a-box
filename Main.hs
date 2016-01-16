@@ -115,8 +115,9 @@ systemctl cmd vmn cfg opts s@State {..} =
     Just _ -> do
       let user = "kib-" ++ vmn
       uid <- userID <$> getUserEntryForName user
-      pro [ "sudo", "-u", show uid, "XDG_RUNTIME_DIR=" ++ varrundir uid
-          , "systemctl", "--user", "start", user ]
+      let sudo = [ "sudo", "-u", vmn, "XDG_RUNTIME_DIR=" ++ varrundir uid ]
+      pro $ sudo ++ [ "systemctl", "--user", "daemon-reload" ]
+      pro $ sudo ++ [ "systemctl", "--user", cmd, user ]
       return s
 
 start :: VmName -> Config -> Options -> State -> IO State
@@ -142,14 +143,16 @@ console' vmn = do
 
 resources cfg@Config {..} Options {..} kibGrp hosts vms = do
     notTesting <- amNotTesting
-    return $ ManyResources [ passwdR kibGrp
-                           , pubIfR notTesting
-                           , privIfR notTesting
-                           , mkSystemdR hosts
-                           , dnsmasqR
-                           , lvmOwnerResources $ Map.elems vms
-                           , iptablesResource cfg (mkIface "kipubr") (Map.elems vms) (Map.fromList hosts)
-                           ]
+    return $ ManyResources $ concat
+               [ [lvmOwnerResources $ Map.elems vms]
+               , map SomeResource $
+                [ passwdR kibGrp
+                , pubIfR notTesting
+                , privIfR notTesting
+                , dnsmasqR
+                , iptablesResource cfg (mkIface "kipubr") (Map.elems vms) (Map.fromList hosts)
+                ] ++ mkSystemdR hosts
+               ]
  where
    vmns = Map.keys vms
 
@@ -177,14 +180,14 @@ resources cfg@Config {..} Options {..} kibGrp hosts vms = do
    passwdR grp =
        passwdResource (Map.keys vms) grp
 
-   mkSystemdR hosts = ManyResources
-                  $ Map.elems
+   mkSystemdR hosts =
+                    Map.elems
                   $ Map.mapWithKey vmInitResource
                   $ Map.map (\(vm, (mac,_ip)) -> qemu "%t" (Qemu [] False vm) mac)
                   $ Map.intersectionWith (,) vms (Map.fromList hosts)
 
    dnsmasqR = ManyResources $
-       [ vmDnsDhcpResource (map mkIface ["kipubr", "kiprivbr"]) cfg
+       [ vmDnsDhcpResource (map mkIface ["kipubr"]) cfg -- "kiprivbr" disabled until off-link option becomes available in debian version or we do a backport or something
        , vmHostLeaseResource cAddress vmns
        ]
 
@@ -219,7 +222,6 @@ ensure cfg@Config {..} opts@Options {..} vms = do
     swallow $ ensureResource oRoot rs
 
     unlessTesting $ do
-      void $ system "systemctl daemon-reload"
       void $ system "/etc/init.d/netfilter-persistent reload"
 
     return $ Map.fromList hosts
@@ -293,6 +295,7 @@ withInfo desc opts = info opts $ progDesc desc
 
 -- TODO: exec dat shit?
 adminConsole user = do
+  pro [ "systemctl", "--user", "daemon-reload" ]
   let 'k':'i':'b':'-':vmn = user
   putStr "> "
   l <- dropWhileEnd isSpace . dropWhile isSpace <$> getLine
@@ -303,11 +306,16 @@ adminConsole user = do
         pro [ "systemctl", "--user", "restart", user ]
         threadDelay (500 * 1000)
         console' vmn
+    ["status"] -> do
+        pro_ [ "systemctl", "--user", "status", "--full", user ]
+        adminConsole user
     ["start"] -> do
         pro [ "systemctl", "--user", "start", user ]
+        pro_ [ "systemctl", "--user", "status", user ]
         adminConsole user
     ["stop"] -> do
         pro [ "systemctl", "--user", "stop", user ]
+        pro_ [ "systemctl", "--user", "status", user ]
         adminConsole user
     ["disable"] -> do
         pro [ "systemctl", "--user", "disable", user ]
@@ -367,6 +375,7 @@ main = do
       putStrLn ""
       putStrLn "kvm-in-a-box VM admin console"
       putStrLn "Commands:"
+      putStrLn "  > status"
       putStrLn "  > console"
       putStrLn "  > reset"
       putStrLn "  > start"

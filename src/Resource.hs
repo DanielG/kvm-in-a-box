@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell, ExistentialQuantification, RankNTypes, TypeFamilies #-}
+{-# LANGUAGE TemplateHaskell, ExistentialQuantification, RankNTypes, TypeFamilies, DeriveDataTypeable #-}
 module Resource where
 
 import Control.Monad
@@ -8,6 +8,7 @@ import Control.Applicative
 import Control.Arrow
 import Data.List
 import Data.Maybe
+import Data.Typeable
 import System.IO
 import System.Directory
 import System.Posix.Files
@@ -48,16 +49,22 @@ type FilePerms = (UidGid, Maybe FilePermMask)
 
 defaultFilePerms = ((Nothing, Nothing), Nothing)
 
-data Resource =
+class ResourceC r where
+    ensureResource :: FilePath -> r -> IO ()
+    resourceOwners :: FilePath -> r -> IO [ResourceOwner]
+    resourcePaths  :: r -> [FilePath]
+
+data SimpleFileResource =
      SimpleFileResource {
-      rPath      :: FilePath,
-      rPerms     :: FilePerms,
-      rOwner     :: ResourceOwner,
-      rNormalize :: String -> String,
-      rContent   :: String
+      sfrPath      :: FilePath,
+      sfrPerms     :: FilePerms,
+      sfrOwner     :: ResourceOwner,
+      sfrNormalize :: String -> String,
+      sfrContent   :: String
     }
 
-  | forall a. FromOwned a => FileResource {
+data FileResource a =
+    FileResource {
       rPath        :: FilePath,
       rPerms       :: FilePerms,
       rNormalize   :: String -> String,
@@ -66,7 +73,7 @@ data Resource =
       rContentFunc :: Maybe (Owned a) -> Owned a
     }
 
-  | forall a. FromOwned a => MultiFileResource {
+  | MultiFileResource {
       rNormalize    :: String -> String,
       rParse        :: String -> Owned a,
       rUnparse      :: a -> String,
@@ -75,145 +82,145 @@ data Resource =
       rContentFuncs :: [ [(FilePath, String)] -> Maybe (Owned a) -> Owned a ]
     }
 
-  | DirectoryResource {
-      rPath      :: FilePath,
-      rPerms     :: FilePerms,
-      rOwner     :: ResourceOwner
+data FileMetaResource =
+    DirectoryResource {
+      fmrPath      :: FilePath,
+      fmrPerms     :: FilePerms,
+      fmrOwner     :: ResourceOwner
     }
 
   | SymlinkResource {
-      rPath      :: FilePath,
-      rTarget    :: FilePath,
-      rOwner     :: ResourceOwner
+      fmrPath      :: FilePath,
+      fmrTarget    :: FilePath,
+      fmrOwner     :: ResourceOwner
     }
-  | forall a. Show a => IOResource {
+
+data IOResource a = IOResource {
       rCheck       :: IO a,
       rUpdateMsg   :: a -> String,
       rUpdate      :: a -> IO ()
     }
-  | ManyResources {
-      rOthers :: [Resource]
+
+data ManyResources = ManyResources {
+      rOthers :: [SomeResource]
     }
 
-isIOResource IOResource {} = True
-isIOResource _ = False
+data SomeResource = forall r. ResourceC r => SomeResource r
+  deriving (Typeable)
 
-ensureResource root (DirectoryResource (rootRel root -> path) perms _row) = do
-  e <- doesDirectoryExist path
-  if e
-     then do
-       unlessTesting $ setPerms path perms
+instance ResourceC SimpleFileResource where
+  ensureResource root (SimpleFileResource path perms owner norm content) = do
+    ensureResource root $
+      FileResource path perms norm (return . (,) owner) head (const [(owner, content)])
 
+  resourceOwners r (SimpleFileResource path perms owner norm content) = do
+    resourceOwners r $
+      FileResource path perms norm (return . (,) owner) head (const [(owner, content)])
 
-     -- then whenRoot $ do
-     --   uid <- getUid
-     --   gid <- getGid
-     --   st <- getFileStatus path
-     --   let chg = or [ fileOwner st /= uid
-     --                , fileGroup st /= gid
-     --                ]
-
-     --   when chg $ do
-     --        klog $ "directory '"++path++"' metadata changed, setting."
-     --        setPerms path perms
-
-     else do
-       klog $ "directory '"++path++"' missing, creating."
-       createDirectoryIfMissing True path
-       unlessTesting $ setPerms path perms
-
- -- where
- --   getUid = userID <$> getUserEntryForName (fromMaybe "root" owner)
- --   getGid = groupID <$> getGroupEntryForName (fromMaybe "root" grp)
-
-ensureResource root (SimpleFileResource path perms owner norm content) = do
-  ensureResource root $
-    FileResource path perms norm (return . (,) owner) head (const [(owner, content)])
-
-ensureResource root (FileResource path perms norm parse unparse content) = do
-  ensureResource root $
-    MultiFileResource norm parse unparse [] [(path, perms)] [const content]
-
-ensureResource r res@MultiFileResource {rNormalize=norm} =
-  void $ withMultiFileResource r res $ \ctx parse unparse cf (path, perms) mf ->
-    case mf of
-      Nothing -> do
-              klog $ "resource '"++path++"' missing, creating."
-              writeFile'' path (Just perms) $ unparse $ disown $ cf ctx Nothing
-      Just (force -> f) | norm f /= norm (unparse $ disown $ cf ctx $ Just $ parse f) -> do
-              klog $ "resource '"++path++"' changed, rewriting."
-              writeFile'' path (Just perms) $ unparse $ disown $ cf ctx $ Just (parse f)
-      _ -> return ()
+  resourcePaths (SimpleFileResource {sfrPath}) = [sfrPath]
 
 
--- ensureResource root SymlinkResource {..} = do
---   e <- linkExists rPath
---   if not e
---      then createSymbolicLink rPath rTarget
---      else do
---        same <- liftM2 (/=) (canonicalizePath rPath) (canonicalizePath rTarget)
---        if same
---          then return ()
---          else do
---            klog $ "resource '"++rPath++"' points to wrong target, recreating link."
---            removeFile rPath
---            createSymbolicLink rPath rTarget
+instance FromOwned a => ResourceC (FileResource a) where
+  ensureResource root (FileResource path perms norm parse unparse content) = do
+    ensureResource root $
+      MultiFileResource norm parse unparse [] [(path, perms)] [const content]
 
-ensureResource _ IOResource {..} = do
-  a <- rCheck
-  klog $ rUpdateMsg a
-  rUpdate a
+  ensureResource r res@MultiFileResource {rNormalize=norm} =
+    void $ withMultiFileResource r res $ \ctx parse unparse cf (path, perms) mf ->
+      case mf of
+        Nothing -> do
+                klog $ "resource '"++path++"' missing, creating."
+                writeFile'' path (Just perms) $ unparse $ disown $ cf ctx Nothing
+        Just (force -> f) | norm f /= norm (unparse $ disown $ cf ctx $ Just $ parse f) -> do
+                klog $ "resource '"++path++"' changed, rewriting."
+                writeFile'' path (Just perms) $ unparse $ disown $ cf ctx $ Just (parse f)
+        _ -> return ()
 
-ensureResource root (ManyResources rs) = mapM_ (ensureResource root) rs
+  resourceOwners r (FileResource path perms norm parse unparse content) = do
+    resourceOwners r $
+      MultiFileResource norm parse unparse [] [(path, perms)] [const content]
 
-resourcePaths (SimpleFileResource {rPath}) = [rPath]
-resourcePaths (FileResource {rPath}) = [rPath]
-resourcePaths (MultiFileResource {rPaths}) = map fst rPaths
-resourcePaths (DirectoryResource {rPath}) = ["dir:" ++ rPath]
-resourcePaths (SymlinkResource {rPath}) = ["sym:" ++ rPath]
-resourcePaths (IOResource {}) = ["<IO resource>"]
-resourcePaths (ManyResources rs) = concatMap resourcePaths rs
+  resourceOwners r MultiFileResource{rUnparse = (rUnparse :: a -> String), ..} = do
+    let paths = map (rootRel r . fst) rPaths
+    mfs <- mapM readFileMaybe paths
+    let ctx = [ (p, f) | (p, Just f) <- paths `zip` mfs ]
 
-resourceOwners :: FilePath -> Resource -> IO [ResourceOwner]
-resourceOwners r (SimpleFileResource path perms owner norm content) = do
-  resourceOwners r $
-    FileResource path perms norm (return . (,) owner) head (const [(owner, content)])
+    return $ do
+      (cf, p, mf) <- zip3 rContentFuncs paths mfs
 
-resourceOwners r (FileResource path perms norm parse unparse content) = do
-  resourceOwners r $
-    MultiFileResource norm parse unparse [] [(path, perms)] [const content]
+      case mf of
+        Nothing -> []
+        Just f -> let
+                  x = cf ctx $ Just $ rParse f
+             in owners (Proxy :: Proxy a) x
 
-resourceOwners r MultiFileResource{rUnparse = (rUnparse :: a -> String), ..} = do
-  let paths = map (rootRel r . fst) rPaths
-  mfs <- mapM readFileMaybe paths
-  let ctx = [ (p, f) | (p, Just f) <- paths `zip` mfs ]
+  resourcePaths (FileResource {rPath}) = [rPath]
+  resourcePaths (MultiFileResource {rPaths}) = map fst rPaths
 
-  return $ do
-    (cf, p, mf) <- zip3 rContentFuncs paths mfs
 
-    case mf of
-      Nothing -> []
-      Just f -> let
-                x = cf ctx $ Just $ rParse f
-           in owners (Proxy :: Proxy a) x
+instance ResourceC FileMetaResource where
+  ensureResource root (DirectoryResource (rootRel root -> path) perms _row) = do
+    e <- doesDirectoryExist path
+    if e
+       then do
+         unlessTesting $ setPerms path perms
+       else do
+         klog $ "directory '"++path++"' missing, creating."
+         createDirectoryIfMissing True path
+         unlessTesting $ setPerms path perms
 
-resourceOwners r DirectoryResource {rOwner} = return [rOwner]
-resourceOwners r SymlinkResource {rOwner} = return [rOwner]
-resourceOwners r IOResource {} = return []
-resourceOwners r (ManyResources rs) = concat <$> mapM (resourceOwners r) rs
+  ensureResource root SymlinkResource {..} = do
+    e <- linkExists fmrPath
+    if not e
+       then createSymbolicLink fmrPath fmrTarget
+       else do
+         same <- liftM2 (/=) (canonicalizePath fmrPath) (canonicalizePath fmrTarget)
+         if same
+           then return ()
+           else do
+             klog $ "resource '"++fmrPath++"' points to wrong target, recreating link."
+             removeFile fmrPath
+             createSymbolicLink fmrPath fmrTarget
 
-withMultiFileResource :: FilePath -> Resource ->
+  resourceOwners r DirectoryResource {fmrOwner} = return [fmrOwner]
+  resourceOwners r SymlinkResource {fmrOwner} = return [fmrOwner]
 
-                         (forall a. FromOwned a =>
-                            [(FilePath, String)]
+  resourcePaths (DirectoryResource {fmrPath}) = ["dir:" ++ fmrPath]
+  resourcePaths (SymlinkResource {fmrPath}) = ["sym:" ++ fmrPath]
+
+
+instance ResourceC (IOResource a) where
+  ensureResource _ IOResource {..} = unlessTesting $ do
+    a <- rCheck
+    klog $ rUpdateMsg a
+    rUpdate a
+
+  resourceOwners _ _ = return []
+  resourcePaths (IOResource {}) = ["<IO resource>"]
+
+instance ResourceC ManyResources where
+  ensureResource root (ManyResources rs) =
+      mapM_ (ensureResource root) rs
+  resourceOwners r (ManyResources rs) =
+      concat <$> mapM (resourceOwners r) rs
+  resourcePaths (ManyResources rs) = concatMap resourcePaths rs
+
+instance ResourceC SomeResource where
+  ensureResource root (SomeResource r) = ensureResource root r
+  resourceOwners root (SomeResource r) = resourceOwners root r
+  resourcePaths (SomeResource r) = resourcePaths r
+
+withMultiFileResource :: FromOwned a
+                      => FilePath
+                      -> FileResource a
+                      -> (  [(FilePath, String)]
                          -> (String -> Owned a)
                          -> (a -> String)
                          -> ([(FilePath, String)] -> Maybe (Owned a) -> Owned a)
                          -> (FilePath, FilePerms)
                          -> Maybe String
                          -> IO b)
-
- -> IO [b]
+                      -> IO [b]
 withMultiFileResource r MultiFileResource{..} fn = do
   let
       pathPerms = map (first $ rootRel r) rPaths
