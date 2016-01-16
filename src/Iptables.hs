@@ -68,18 +68,6 @@ instance IxFoldable Ix IptablesSave where
         flip2both foldr cm b $ \(cn, a) b' ->
           f ((tn, cn), lookup cn pm) a b'
 
--- instance IxTraversable Ix IptablesSave where
---     itraverse f = iwither (\i a -> Just <$> f i a)
-
--- instance IxWitherable Ix IptablesSave where
---     iwither f (IptablesSave cs tm) = IptablesSave cs <$>
---       flip itraverseAL tm (\tn (pm, cm) -> (pm,) <$>
---         wither (\(cn, rs) -> sequenceA . (cn,) <$>
---           (f ((tn, cn), lookup cn pm) rs)) cm)
-
-itraverseAL :: Applicative f => (i -> a -> f b) -> AList i a -> f (AList i b)
-itraverseAL f am = traverse (\(i, a) -> (i,) <$> f i a) am
-
 instance FromOwned (IS r) where
     type Owned (IS r) = IS (ResourceOwner, r)
     disown = fmap snd
@@ -251,10 +239,6 @@ parse str =
     case runParser (parseIptablesSave <* eof) () "<iptables-save>" str of
       Left err -> error (show err)
       Right a -> a
-
--- | @insertAcceptRulesIntoChains d s@. Rules in @s@ must not have a jump
--- target or have the target ACCEPT for the semantics of d to be
--- preserved. Assumes rules from @s@ are not already in @d@.
 
 replaceOrInsertPolicy :: IptablesSave [ISRule] -> TCAList ISPolicy -> IptablesSave [ISRule]
 replaceOrInsertPolicy (IptablesSave cs ts) tcal = IptablesSave cs $

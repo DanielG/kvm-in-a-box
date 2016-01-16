@@ -74,12 +74,6 @@ setPerms path (uidgid, mmask) = do
   maybe (return ()) (\mask -> void $ rawSystem "chmod" [mask, path]) mmask
   maybe (return ()) (\idmod -> void $ rawSystem "chown" [idmod, path]) midmod
 
--- amIRoot :: IO Bool
--- amIRoot = (==0) <$> getRealUserID
-
--- whenRoot :: IO () -> IO ()
--- whenRoot a = join $ when <$> amIRoot <*> pure a
-
 amNotTesting :: IO Bool
 amNotTesting =
   (`elem` [Nothing, Just ""]) <$> lookupEnv "KIB_TESTING"
@@ -136,37 +130,11 @@ class IxFoldable i t | t -> i where
 class IxFoldable i t => IxTraversable i t | t -> i where
     itraverse :: Applicative f => (i -> a -> f b) -> t a -> f (t b)
 
--- class IxTraversable i t => IxWitherable i t | t -> i where
---     iwither :: Applicative f => (i -> a -> f (Maybe b)) -> t a -> f (t b)
---     iwither f = fmap icatMaybes . itraverse f
-
---     imapMaybe :: (i -> a -> Maybe b) -> t a -> t b
---     imapMaybe f = runIdentity . iwither ((Identity.) . f)
-
---     {-# MINIMAL iwither | imapMaybe #-}
-
 instance IxFunctor k (Map.Map k) where
     imap = Map.mapWithKey
 
 instance IxFoldable k (Map.Map k) where
     ifoldr = Map.foldrWithKey
-
-instance IxTraversable k (Map.Map k) where
-    itraverse f m = F.sequenceA $ Map.mapMaybeWithKey (\k a -> Just $ f k a) m
-
--- instance IxWitherable k (Map.Map k) where
---     imapMaybe = Map.mapMaybeWithKey
-
-
--- ifilterA :: IxWitherable i t => Applicative f => (i -> a -> f Bool) -> t a -> f (t a)
--- ifilterA f = iwither (\i a -> bool Nothing (Just a) <$> f i a)
-
--- ifilter :: IxWitherable i t => (i -> a -> Bool) -> t a -> t a
--- ifilter f = imapMaybe (\i a -> bool Nothing (Just a) $ f i a)
-
--- icatMaybes :: IxWitherable i t => t (Maybe a) -> t a
--- icatMaybes = imapMaybe (const id)
-
 
 -- test_stuff = do
 --   quickCheckWith args $ \(x :: T) ->
