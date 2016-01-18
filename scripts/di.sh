@@ -18,8 +18,9 @@ fi
     7z x "$1" install.amd
     if [ ! -d install.amd ]; then
         echo "Extracting Debian installer kernel+inird failed">&2
-        exit 1b
+        exit 1
     fi
 )
 
+qemu-img create -f raw /tmp/di.img 10G || true
 qemu-system-x86_64 -nographic -vga none -cpu host -machine pc,accel=kvm -m 1024 -smp 4 -cdrom "$1" -kernel $tmpdir/install.amd/vmlinuz -initrd $tmpdir/install.amd/initrd.gz -append "console=ttyS0,9600 $PRESEED" -net user,tftp="$tmpdir" -net nic -hda /tmp/di.img
