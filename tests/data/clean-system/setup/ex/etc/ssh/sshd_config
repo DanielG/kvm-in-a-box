@@ -1,6 +1,9 @@
 Match Group kib
-  AllowTcpForwarding no
+  AuthorizedKeysFile /etc/ssh/authorized_keys/%u
+  AllowStreamLocalForwarding no
   AllowAgentForwarding no
   AcceptEnv no
   X11Forwarding no
   PermitTunnel no
+  PermitUserRC no
+  PasswordAuthentication no
