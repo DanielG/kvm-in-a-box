@@ -1,10 +1,15 @@
 #!/usr/bin/env stack
--- stack --install-ghc runghc --package filepath --package split --package temporary
+-- stack --install-ghc runghc --package filepath --package split --package temporary --package MissingH --package diff-parse --package text
+
+{-# LANGUAGE RecordWildCards, ViewPatterns #-}
 
 import Control.Monad
 import Control.Exception
+import Control.Monad.Trans.State.Strict
+import Control.Monad.IO.Class
 import Data.List
 import Data.List.Split
+import Data.String.Utils
 import System.Environment
 import System.Directory
 import System.FilePath
@@ -13,7 +18,10 @@ import System.Posix
 import System.Exit
 import System.IO
 import System.IO.Temp
+import Text.Diff.Parse
+import Text.Diff.Parse.Types
 
+import qualified Data.Text as Text
 
 scriptPath =
     head . drop 1 . reverse . splitOn "\NUL" <$> readFile "/proc/self/cmdline"
@@ -63,15 +71,15 @@ main = do
 
     (rv, diff, err)  <- readProcessWithExitCode "git" ["diff", "--no-index", "--color", "--word-diff=color", "--", e, i] ""
 
-    (rv', diff', err')  <- readProcessWithExitCode "git" ["diff", "--no-index", "--", e, i] ""
-
+    (rv', plaindiff, err')  <- readProcessWithExitCode "git" ["diff", "--no-index", "--", e, i] ""
+    plaindiff' <- fixdiff common test_dir e i plaindiff
 
     case rv of
       ExitSuccess -> return True
       ExitFailure _ -> do
               let [_, g, t] = splitDirectories test_dir
               createDirectoryIfMissing True "diffs"
-              writeFile ("diffs" </> (g ++ "; " ++ t) <.> "diff") diff'
+              writeFile ("diffs" </> (g ++ "; " ++ t) <.> "diff") plaindiff'
               putStrLn diff
               putStrLn ""
               return False
@@ -92,3 +100,44 @@ withT tpl a = do
   tmp <- getTemporaryDirectory
   dir <- createTempDirectory tmp tpl
   a dir
+
+
+fixdiff _ _ _ _ plaindiff | strip plaindiff == "" = return ""
+fixdiff common test_dir e i plaindiff = do
+  let sdss = case parseDiff $ Text.pack plaindiff of
+              Left e -> error $ "fixdiff: " ++ e
+              Right fds -> flip map fds $ \FileDelta {..} ->
+                let src = Text.unpack fileDeltaSourceFile
+                    dst = Text.unpack fileDeltaDestFile
+                in
+                  [src, dst]
+      sds = map ("/" </>) $ concat sdss
+
+  plaindiff' <- flip execStateT plaindiff $ forM sds $ \sd -> do
+    let (joinPath -> d', joinPath -> f) = splitAt 3 $ splitPath sd
+        -- d | d' `equalFilePath` i = "in"
+        --   | d' `equalFilePath` e = "ex"
+        d = "ex"
+
+    liftIO $ print ("fixdiff", sd, common </> d </> f, test_dir </> d </> f)
+
+    cd <- liftIO $ doesFileExist $ common </> d </> f
+    td <- liftIO $ doesFileExist $ test_dir </> d </> f
+
+    let r
+         | cd = common </> d </> f
+         | td = test_dir </> d </> f
+         | otherwise = test_dir </> d </> f
+
+    put =<< (replace sd ("/" </> r) <$> get)
+
+
+  print ("fixdiff", common, test_dir, e, i)
+  print ("fixdiff", sds)
+
+  putStrLn plaindiff
+  putStrLn plaindiff'
+
+  return $ removeGitMetadata plaindiff'
+
+removeGitMetadata = unlines . filter (\l -> not $ "index" `isPrefixOf` l || "diff" `isPrefixOf` l) . lines
