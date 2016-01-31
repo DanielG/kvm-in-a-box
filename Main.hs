@@ -84,7 +84,7 @@ remove vmn cfg opts s@State { sVms=sVms0, sNet }
         return $ s { sVms = sVms1 }
 
     | otherwise =
-        error $ "VM '"++vmn++"' doesn't exist."
+        error $ "VM '"++vmn++"' does not exist."
 
 
 change :: VmName -> VmFlags -> Config -> Options -> State -> IO State
@@ -245,7 +245,7 @@ ensureResources cfg@Config {..} opts@Options {..} vms = do
 removeResources :: Config -> Options -> Map VmName Vm -> Map VmName (MAC, IPv4) -> VmName -> IO ()
 removeResources cfg opts@Options {..} vms hosts vmn = do
     kibGrp <- getGroupEntryForName "kib"
-    rs <- resources cfg opts kibGrp (Map.toList hhosts) vms
+    rs <- resources cfg opts kibGrp (Map.toList hosts) vms
     removeResource oRoot (Just $ OwnerVm vmn) rs
 
 setup :: Config -> Options -> State -> IO State
@@ -385,7 +385,7 @@ installDebian vmn mfile = void $ do
          exitFailure
 
     hPutStrLn stderr $ unwords $ cmd:args
-    rawSystem "flock" $ "-n":"primaryDisk":cmd:args
+    rawSystem "flock" $ "-n":primaryDisk:cmd:args
 
 main = do
   prog <- getProgName

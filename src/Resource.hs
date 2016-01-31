@@ -118,8 +118,8 @@ instance ResourceC SimpleFileResource where
 
   removeResource root mo SimpleFileResource {sfrPath, sfrOwner} =
     case mo of
-      Nothing -> removeFile sfrPath
-      Just owner -> when (owner == sfrOwner) $ removeFile sfrPath
+      Nothing -> removeFile (rootRel root sfrPath)
+      Just owner -> when (owner == sfrOwner) $ removeFile (rootRel root sfrPath)
 
   resourceOwners r (SimpleFileResource path perms owner norm content) = do
     resourceOwners r $
@@ -147,10 +147,13 @@ instance FromOwned a => ResourceC (FileResource a) where
   removeResource root (Just owner) (MultiFileResource {rUnparse = (rUnparse :: a -> String), ..}) = do
       let ps = map fst rPaths
       forM_ ps $ \p -> do
-        f <- rParse <$> readFile (root </> p)
-        writeFile' p $ rUnparse $ disown $ filterOwner (Proxy :: Proxy a) (==owner) f
+        f <- rParse <$> readFile (rootRel root p)
+        writeFile' (rootRel root p) $ rUnparse $ disown $ filterOwner (Proxy :: Proxy a) (==owner) f
+  removeResource root (Just owner) (FileResource {..}) = do
+      f <- rParse <$> readFile (rootRel root rPath)
+      writeFile' (rootRel root rPath) $ rUnparse $ disown $ filterOwner (Proxy :: Proxy a) (==owner) f
   removeResource root Nothing res =
-      forM_ paths $ \p -> removeFile (root </> p)
+      forM_ paths $ \p -> removeFile (rootRel root p)
     where
       paths | MultiFileResource {..} <- res = map fst rPaths
             | FileResource {..} <- res = [rPath]
@@ -201,7 +204,14 @@ instance ResourceC FileMetaResource where
              removeFile fmrPath
              createSymbolicLink fmrPath fmrTarget
 
-  removeResource = error "FileMetaResource"
+  removeResource root mo (DirectoryResource (rootRel root -> path) _ owner)
+      | mo == Just owner = removeDirectoryRecursive path
+      | otherwise = return ()
+
+  removeResource root mo SymlinkResource {..}
+      | mo == Just fmrOwner = removeLink fmrPath
+      | otherwise = return ()
+
 
   resourceOwners r DirectoryResource {fmrOwner} = return [fmrOwner]
   resourceOwners r SymlinkResource {fmrOwner} = return [fmrOwner]

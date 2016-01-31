@@ -1,0 +1,5 @@
+domain=kvm-box.example.net
+dhcp-hostsfile=/etc/dnsmasq.kib.hosts
+enable-ra
+dhcp-range=10.0.0.1,static
+dhcp-range=::,constructor:kipubr,slaac

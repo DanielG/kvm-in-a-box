@@ -65,7 +65,7 @@ main = do
     let cmds = splitOn ";" $ takeFileName test_dir
         runTestCmd cmd = kib ++ " --root '"++ shellEscape i ++ "' " ++ cmd
 
-    mapM (system . runTestCmd) cmds
+    mapM ((\cmd -> print cmd >> system cmd) . runTestCmd) cmds
 
 --    rawSystem "find" [i]
 
@@ -79,7 +79,7 @@ main = do
       ExitFailure _ -> do
               let [_, g, t] = splitDirectories test_dir
               createDirectoryIfMissing True "diffs"
-              writeFile ("diffs" </> (g ++ "; " ++ t) <.> "diff") plaindiff'
+              writeFile ("diffs" </> (g ++ "; " ++ t) <.> "diff") $ removeGitMetadata plaindiff'
               putStrLn diff
               putStrLn ""
               return False
@@ -119,8 +119,6 @@ fixdiff common test_dir e i plaindiff = do
         --   | d' `equalFilePath` e = "ex"
         d = "ex"
 
-    liftIO $ print ("fixdiff", sd, common </> d </> f, test_dir </> d </> f)
-
     cd <- liftIO $ doesFileExist $ common </> d </> f
     td <- liftIO $ doesFileExist $ test_dir </> d </> f
 
@@ -131,13 +129,6 @@ fixdiff common test_dir e i plaindiff = do
 
     put =<< (replace sd ("/" </> r) <$> get)
 
+  return plaindiff'
 
-  print ("fixdiff", common, test_dir, e, i)
-  print ("fixdiff", sds)
-
-  putStrLn plaindiff
-  putStrLn plaindiff'
-
-  return $ removeGitMetadata plaindiff'
-
-removeGitMetadata = unlines . filter (\l -> not $ "index" `isPrefixOf` l || "diff" `isPrefixOf` l) . lines
+removeGitMetadata = unlines . filter (\l -> not $ "index" `isPrefixOf` l || "diff" `isPrefixOf` l || "new" `isPrefixOf` l) . lines
