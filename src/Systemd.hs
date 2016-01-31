@@ -41,6 +41,6 @@ service vmn (cmd:args) = "\
  \StandardError=journal\n\
  \\n\
  \[Install]\n\
- \WantedBy=multi-user.target\n"
+ \WantedBy=default.target\n"
 
 -- \User=kib-"++vmn++"\n\

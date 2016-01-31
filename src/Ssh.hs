@@ -1,4 +1,4 @@
-module Ssh (sshdResource) where
+module Ssh (sshdResource, authorizedKeysResource) where
 
 import Control.Applicative ((<$>), (<*>), (<*), (*>))
 import Data.Char
@@ -14,6 +14,7 @@ import Unsafe.Coerce
 import Debug.Trace
 import Text.Show.Pretty
 
+import Types
 import Resource
 import Files
 import ParserUtils
@@ -26,6 +27,16 @@ sshdResource = SomeResource $ FileResource {
     rParse = map markOurs . parse,
     rUnparse = concatMap unparse :: [SshCfgDir] -> String,
     rContentFunc = addOrReplace (isOurs . snd) (OwnerKib, cfg) . fromMaybe []
+  }
+
+authorizedKeysResource :: Vm -> SomeResource
+authorizedKeysResource Vm { vName, vSysCfg = VmSysCfg { vAuthorizedKeys } } =
+  SomeResource $ SimpleFileResource {
+    sfrOwner = OwnerVm vName,
+    sfrPath = etcdir </> "ssh/authorized_keys/" ++ "kib-" ++ vName,
+    sfrPerms = ((Nothing, Nothing), Just "644"),
+    sfrContent = unlines vAuthorizedKeys,
+    sfrNormalize = id
   }
 
 both f a b = f a && f b
@@ -74,13 +85,22 @@ headMatch (SshCfgDir d as _) (SshCfgDir d' as' _) =
     map toLower d == map toLower d && as == as'
 headMatch _ _ = False
 
-cfg = SshCfgDir "Match" ["Group", "kib"] [
-          SshCfgDir "AllowTcpForwarding" ["no"] [],
-          SshCfgDir "AllowAgentForwarding" ["no"] [],
-          SshCfgDir "AcceptEnv" ["no"] [],
-          SshCfgDir "X11Forwarding" ["no"] [],
-          SshCfgDir "PermitTunnel" ["no"] []
-      ]
+cfg = SshCfgDir "Match" ["Group", "kib"] $
+      [ SshCfgDir "AuthorizedKeysFile" ["/etc/ssh/authorized_keys/%u"] []
+      ] ++ hardening_directives
+ where
+   hardening_directives :: [SshCfgDir]
+   hardening_directives =
+          map (\dir -> SshCfgDir dir ["no"] []) [
+                    "AllowStreamLocalForwarding"
+                  , "AllowAgentForwarding"
+                  , "AcceptEnv"
+                  , "X11Forwarding"
+                  , "PermitTunnel"
+                  , "PermitUserRC"
+--                  , "PermitUserEnvironment"
+                  , "PasswordAuthentication"
+                  ]
 
 data SshCfgLine = SshCfgLine { sclDir :: String, sclArgs :: [String] }
                 | SshCommentLine String

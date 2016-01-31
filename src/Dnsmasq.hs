@@ -47,7 +47,9 @@ vmHostLeaseResource addr vmns =
     rContentFunc = addOwner . allocate addr vmns . map snd . fromMaybe []
  }
 
-addOwner = map (\x@(vmn,_) -> (OwnerVm vmn, x))
+-- NOTE: I make KIB the owner of all host entries since I don't want IPs to ever
+-- be re-assigned to another VM.
+addOwner = map (\x@(_vmn,_) -> (OwnerKib, x))
 
 kibHostsFile = etcdir </> "dnsmasq.kib.hosts"
 

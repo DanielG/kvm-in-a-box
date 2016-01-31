@@ -72,6 +72,9 @@ instance FromOwned (IS r) where
     type Owned (IS r) = IS (ResourceOwner, r)
     disown = fmap snd
     owners _ (IS is) = map fst $ concat $ ifoldr (const (:)) [] is
+    filterOwner _ p (IS (IptablesSave cs ts)) =
+        IS $ IptablesSave cs $
+           flip map ts $ second $ second $ map $ second $ filter (p . fst)
 
 newtype IS r = IS { unIS :: IptablesSave [r] }
     deriving (Functor)
@@ -164,6 +167,7 @@ updateTables ipv Config {..} pubif vms hosts = insertKib . removeKib
     , "-j", "ACCEPT"
     ]
 
+  -- allow dns and DHCP
   inputs_from_pub :: [(Proto, String)]
   inputs_from_pub = [ (UDP, "67:68")
                     , (UDP, "53")

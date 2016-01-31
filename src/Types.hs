@@ -74,13 +74,14 @@ flagTH [d|
  data VmSysCfg = VmSysCfg {
  -- | VM system configuration, i.e. stuff we setup on the host system
        vVg :: String,
+       vAddDisks :: [String],
        -- TODO: lvm disk handling
 
        vAuthorizedKeys :: [String]
      } deriving (Eq, Ord, Show, Read, Generic)
  |]
 
-defVmSysCfg = VmSysCfg "vg0" []
+defVmSysCfg = VmSysCfg "vg0" [] []
 
 
 flagTH [d|

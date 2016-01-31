@@ -47,7 +47,7 @@ writeState opts s = do
     let f = rootRel (oRoot opts) stateFile
     createDirectoryIfMissing True (takeDirectory f)
     writeFile'LBS f $ LBS.concat
-      [ "kvm-in-a-box state format: v3\n", encode s, "\n" ]
+      [ "kvm-in-a-box state format: v4\n", encode s, "\n" ]
 
 modifyState opts f = do
   s <- readState opts

@@ -13,6 +13,7 @@ import System.Process
 import System.FilePath
 import System.IO
 import System.IO.Temp
+import System.Exit
 import Control.Monad
 import Control.DeepSeq
 import Control.Exception
@@ -68,16 +69,23 @@ create vmn vmf0 cfg opts s@State { sVms=sVms0 }
     | not $ vmn `Map.member` sVms0 = do
         let vm = unVmFlags vmn $ combineVmFlags vmf0 defVmFlags
             sVms1 = Map.insert vmn vm sVms0
-        sNet <- ensure cfg opts sVms1
+        sNet <- ensureResources cfg opts sVms1
         return $ s { sVms = sVms1, sNet = sNet }
     | otherwise =
         error $ "VM '"++vmn++"' already exists."
 
-destroy :: VmName -> Config -> Options -> State -> IO State
-destroy vmn cfg opts s@State { sVms=sVms0 } = do
-    let sVms1 = Map.filter ((/=vmn) . vName) sVms0
-    sNet <- ensure cfg opts sVms1
-    return $ s { sVms = sVms1, sNet = sNet }
+remove :: VmName -> Config -> Options -> State -> IO State
+remove vmn cfg opts s@State { sVms=sVms0, sNet }
+    | vmn `Map.member` sVms0 = do
+        let Just vm = Map.lookup vmn sVms0
+            sVms1 = Map.delete vmn sVms0
+
+        removeResources cfg opts sVms0 sNet vmn
+        return $ s { sVms = sVms1 }
+
+    | otherwise =
+        error $ "VM '"++vmn++"' doesn't exist."
+
 
 change :: VmName -> VmFlags -> Config -> Options -> State -> IO State
 change vmn vmf cfg opts s@State {sVms=sVms0} = do
@@ -86,27 +94,27 @@ change vmn vmf cfg opts s@State {sVms=sVms0} = do
     Just vm0 -> do
       let vm1 = unVmFlags vmn $ combineVmFlags vmf (mkVmFlags vm0)
           sVms1 = Map.insert vmn vm1 sVms0
-      sNet1 <- ensure cfg opts sVms1
+      sNet1 <- ensureResources cfg opts sVms1
       return $ s { sVms = sVms1, sNet = sNet1 }
 
-authorize :: VmName -> String -> Config -> Options -> State -> IO State
-authorize vmn key cfg opts s@State {sVms=sVms0} = do
-  case Map.lookup vmn sVms0 of
-    Nothing -> error $ "VM '"++vmn++"' does not exist."
-    Just vm0 -> do
-      let dotssh = homedir </> "kib-" ++ vmn </> ".ssh"
-      let authorized_keys = dotssh </> "authorized_keys"
-      createDirectoryIfMissing True dotssh
-      mls <- lines . fromMaybe "" <$> readFileMaybe authorized_keys
+-- authorize :: VmName -> String -> Config -> Options -> State -> IO State
+-- authorize vmn key cfg opts s@State {sVms=sVms0} = do
+--   case Map.lookup vmn sVms0 of
+--     Nothing -> error $ "VM '"++vmn++"' does not exist."
+--     Just vm0 -> do
+--       let dotssh = homedir </> "kib-" ++ vmn </> ".ssh"
+--       let authorized_keys = dotssh </> "authorized_keys"
+--       createDirectoryIfMissing True dotssh
+--       mls <- lines . fromMaybe "" <$> readFileMaybe authorized_keys
 
-      writeFile' authorized_keys $ unlines $ nub $ sort $ mls ++ [key]
+--       writeFile' authorized_keys $ unlines $ nub $ sort $ mls ++ [key]
 
-      uid <- userID <$> getUserEntryForName ("kib-" ++ vmn)
-      gid <- groupID <$> getGroupEntryForName "kib"
-      setOwnerAndGroup authorized_keys uid gid
-      setOwnerAndGroup dotssh uid gid
+--       uid <- userID <$> getUserEntryForName ("kib-" ++ vmn)
+--       gid <- groupID <$> getGroupEntryForName "kib"
+--       setOwnerAndGroup authorized_keys uid gid
+--       setOwnerAndGroup dotssh uid gid
 
-      return s
+--       return s
 
 systemctl :: String -> VmName -> Config -> Options -> State -> IO State
 systemctl cmd vmn cfg opts s@State {..} =
@@ -115,7 +123,7 @@ systemctl cmd vmn cfg opts s@State {..} =
     Just _ -> do
       let user = "kib-" ++ vmn
       uid <- userID <$> getUserEntryForName user
-      let sudo = [ "sudo", "-u", vmn, "XDG_RUNTIME_DIR=" ++ varrundir uid ]
+      let sudo = [ "sudo", "-u", user, "XDG_RUNTIME_DIR=" ++ varrundir uid ]
       pro $ sudo ++ [ "systemctl", "--user", "daemon-reload" ]
       pro $ sudo ++ [ "systemctl", "--user", cmd, user ]
       return s
@@ -145,6 +153,7 @@ resources cfg@Config {..} Options {..} kibGrp hosts vms = do
     notTesting <- amNotTesting
     return $ ManyResources $ concat
                [ [lvmOwnerResources $ Map.elems vms]
+               , map authorizedKeysResource $ Map.elems vms
                , map SomeResource $
                 [ passwdR kibGrp
                 , pubIfR notTesting
@@ -210,14 +219,12 @@ listResources cfg@Config {..} opts@Options {..} s@State { sVms=vms } = do
  where
    vmns = Map.keys vms
 
-ensure :: Config -> Options -> Map VmName Vm -> IO (Map VmName (MAC, IPv4))
-ensure cfg@Config {..} opts@Options {..} vms = do
+ensureResources :: Config -> Options -> Map VmName Vm -> IO (Map VmName (MAC, IPv4))
+ensureResources cfg@Config {..} opts@Options {..} vms = do
     kibGrp <- getGroupEntryForName "kib"
     hosts <- allocateHosts oRoot cAddress vmns
 
     rs <- resources cfg opts kibGrp hosts vms
-
-    -- mapM putStrLn $ resourcePaths rs
 
     swallow $ ensureResource oRoot rs
 
@@ -231,9 +238,15 @@ ensure cfg@Config {..} opts@Options {..} vms = do
    swallow ma = do
      eexa <- try $ evaluate =<< ma
      case eexa of
-       Left (SomeException ex) -> hPutStrLn stderr $ "ensure: " ++ show ex
+       Left (SomeException ex) ->
+           hPutStrLn stderr $ "ensureResources: " ++ show ex
        Right a -> return a
 
+removeResources :: Config -> Options -> Map VmName Vm -> Map VmName (MAC, IPv4) -> VmName -> IO ()
+removeResources cfg opts@Options {..} vms hosts vmn = do
+    kibGrp <- getGroupEntryForName "kib"
+    rs <- resources cfg opts kibGrp (Map.toList hhosts) vms
+    removeResource oRoot (Just $ OwnerVm vmn) rs
 
 setup :: Config -> Options -> State -> IO State
 setup cfg opts s = do
@@ -269,14 +282,15 @@ commands = subparser $ mconcat
   , command "create" $ withInfo "Create a new VM" $
       create <$> strArgument (metavar "name") <*> vmP
 
-  -- , command "destroy" $ withInfo "Destroy an existing VM" $
-  --     destroy <$> strArgument (metavar "NAME")
+  , command "remove" $ withInfo "Remove a VM's configuration (not disk state)" $
+      remove <$> strArgument (metavar "NAME")
 
   , command "change" $ withInfo "Change an existing VM" $
       change <$> strArgument (metavar "NAME") <*> vmP
 
-  , command "authorize" $ withInfo "Add an authorized SSH public key to a VM" $
-      authorize <$> strArgument (metavar "NAME") <*> strArgument (metavar "KEY")
+  -- See "--ssh-key" option
+  -- , command "authorize" $ withInfo "Add an authorized SSH public key to a VM" $
+  --     authorize <$> strArgument (metavar "NAME") <*> strArgument (metavar "KEY")
 
   , command "start" $ withInfo "Start an existing VM" $
       start <$> strArgument (metavar "NAME")
@@ -348,13 +362,14 @@ installDebian vmn mfile = void $ do
     when (not exists) $ error "Extracting Debian installer kernel+inird failed"
     uid <- userID <$> getUserEntryForName ("kib-" ++ vmn)
     let
+        vm = Vm vmn
+                defVmCfg
+                defVmSysCfg -- TODO: if vVg is different this is not reflected here
+                defVmNetCfg { vUserIf = True }
+                defVmQCfg { vCpus = 2, vMem = 1024 }
+
         cmd:args' = flip (qemu (varrundir uid)) undefined
-                  $ Qemu [("tftp", tmp)] True
-                  $ Vm vmn
-                       defVmCfg
-                       defVmSysCfg
-                       defVmNetCfg { vUserIf = True }
-                       defVmQCfg { vCpus = 2, vMem = 1024 }
+                  $ Qemu [("tftp", tmp)] True vm
 
         args = args' ++ [ "-kernel", tmp </> "install.amd/vmlinuz"
                         , "-initrd", tmp </> "install.amd/initrd.gz"
@@ -362,9 +377,15 @@ installDebian vmn mfile = void $ do
                         , "-cdrom", iso
                         , "-boot", "d"
                         ]
+        primaryDisk = "/dev" </> (vVg $ vSysCfg vm) </> vmn
+
+    rv <- system "systemctl is-active"
+    when (rv == ExitSuccess) $ do
+         hPutStrLn stderr "VM is running, refusing to let you shoot yourself in the foot."
+         exitFailure
 
     hPutStrLn stderr $ unwords $ cmd:args
-    rawSystem cmd args
+    rawSystem "flock" $ "-n":"primaryDisk":cmd:args
 
 main = do
   prog <- getProgName

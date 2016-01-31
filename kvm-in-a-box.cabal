@@ -28,7 +28,9 @@ executable kib
   build-depends:       base >=4.6 && <4.9
                      , directory
                      , process >= 1.1.0.0
-                     , optparse-applicative == 0.10.*
+                     , optparse-applicative < 0.13
+-- == 0.10.*
+
                      , containers
                      , unix
                      , filepath

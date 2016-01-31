@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 module Options where
 
 import Options.Applicative
@@ -36,17 +37,29 @@ parseIntegralSafe str =
       Left err -> readerError err
 
 portOptionP :: Mod OptionFields (Proto, Word16) -> Parser (Proto, Word16)
-portOptionP = option $ \str -> do
+portTupOptionP :: Mod OptionFields (Proto, (Word16, Word16)) -> Parser (Proto, (Word16, Word16))
+
+#if MIN_VERSION_optparse_applicative(0,11,0)
+portOptionP = option $ str >>= portOptionP'
+portTupOptionP = option $ str >>= portTupOptionP'
+#else
+portOptionP = option portOptionP'
+portTupOptionP = option portTupOptionP'
+#endif
+
+portOptionP' :: String -> ReadM (Proto, Word16)
+portOptionP' str = do
   case splitOn ":" str of
     [mkProto -> proto, port] -> (proto,) <$> parseIntegralSafe port
     _ -> readerError "portOptionP: expecting format 'PROTO:PORT'"
 
-portTupOptionP :: Mod OptionFields (Proto, (Word16, Word16)) -> Parser (Proto, (Word16, Word16))
-portTupOptionP = option $ \str -> do
+portTupOptionP' :: String -> ReadM (Proto, (Word16, Word16))
+portTupOptionP' str = do
   case splitOn ":" str of
     [mkProto -> proto, intern, extern] ->
         (proto,) <$> ((,) <$> parseIntegralSafe intern <*> parseIntegralSafe extern)
     _ -> readerError "portTupOptionP: expecting format 'PROTO:IPORT:EPORT'"
+
 
 defaultOpt x f = fromMaybe x <$> optional f
 
@@ -67,10 +80,15 @@ vmSysCfgP = VmSysCfgFlags
             <<>> metavar "LVM_VG"
             <<>> help "LVM volume group this vm resides on"
 
-     <*> optional $$ many $$ strOption $$
+     <*> optional $$ some $$ strOption $$
+                 long "add-disk"
+            <<>> metavar "LVM_LV"
+            <<>> help "Add a secondary disk: LVM_VG/VM_NAME-LVM_LV"
+
+     <*> optional $$ some $$ strOption $$
                  long "ssh-key"
-            <<>> metavar "ID_XXX.PUB"
-            <<>> help "SSH public key to add to VM console's authorized_keys"
+            <<>> metavar "ssh-rsa AAAA ...."
+            <<>> help "SSH public key string to add to VM console's authorized_keys"
 
 vmNetCfgP :: Parser VmNetCfgFlags
 vmNetCfgP = VmNetCfgFlags
@@ -83,12 +101,12 @@ vmNetCfgP = VmNetCfgFlags
             <<>> metavar "ID"
             <<>> help "Attach VM to specified netork switch"))
 
-     <*> optional $$ many $$ portTupOptionP $$
+     <*> optional $$ some $$ portTupOptionP $$
                  long "forward4"
             <<>> metavar "PROTO:IPORT:EPORT"
             <<>> help "NAT port forwarding IPORT at VM, EPORT from beyond the firewall"
 
-     <*> optional $$ many $$ portOptionP $$
+     <*> optional $$ some $$ portOptionP $$
                  long "open6"
             <<>> metavar "PROTO:PORT"
             <<>> help "Open a port on the v6 firewall"
