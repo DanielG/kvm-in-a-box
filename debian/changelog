@@ -1,3 +1,9 @@
+kvm-in-a-box (2) jessie; urgency=medium
+
+  * New upstream release
+
+ -- Daniel Gröber <dxld@darkboxed.org>  Wed, 10 Feb 2016 00:03:08 +0100
+
 kvm-in-a-box (1) jessie; urgency=medium
 
   * Change versioning scheme

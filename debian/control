@@ -41,7 +41,8 @@ Depends: ${haskell:Depends},
  p7zip-full,
  socat,
  dnsmasq,
- etckeeper
+ etckeeper,
+ libpam-systemd
 Recommends: ${haskell:Recommends},
 Suggests: ${haskell:Suggests},
 Conflicts: ${haskell:Conflicts},
