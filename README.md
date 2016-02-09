@@ -41,9 +41,9 @@ If you want to use it anyways at least install
 [etckeeper](https://joeyh.name/code/etckeeper/) before using KIB so you can
 revert `/etc` to a good state.
 
-KIB can be built using the usual Haskell package installation dance though this
-is discouraged for actual usage since you don't really want to have a copy of
-GHC and all the library dependencies lying around on your server.
+KIB can be built using the usual Haskell package installation dance however some
+config files and links are setup by the debian package build that you'll have to
+do manually.
 
 ### Deployment
 
