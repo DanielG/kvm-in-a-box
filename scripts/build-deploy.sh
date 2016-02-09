@@ -4,7 +4,7 @@ changelog=debian/changelog
 ver=$(dpkg-parsechangelog -S version)
 new_ver=$(( $ver + 1 ))
 
-cat >> $changelog <<EOF
+cat - $changelog > ${changelog}_ <<EOF
 kvm-in-a-box ($new_ver) jessie; urgency=medium
 
   * New upstream release
@@ -12,6 +12,8 @@ kvm-in-a-box ($new_ver) jessie; urgency=medium
  -- $DEBFULLNAME <$DEBEMAIL>  $(date -R)
 
 EOF
+
+mv ${changelog}_ $changelog
 
 sbuild
 
