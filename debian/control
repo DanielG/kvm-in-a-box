@@ -33,6 +33,8 @@ Build-Depends: debhelper (>= 9),
  socat,
  dnsmasq
 Standards-Version: 3.9.6
+X-Description: Single box KVM virtualization server
+ A command line tool for easily managing virtual machines for multiple users.
 
 Package: kvm-in-a-box
 Architecture: any

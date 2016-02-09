@@ -1,8 +1,14 @@
-kvm-in-a-box (0.2.0.1) UNRELEASED; urgency=medium
+kvm-in-a-box (1) jessie; urgency=medium
 
-  * Fix ssh config error
+  * Change versioning scheme
 
- -- Daniel Gröber <dxld@darkboxed.org>  Mon, 25 Jan 2016 20:09:36 +0100
+ -- Daniel Gröber <dxld@darkboxed.org>  Tue, 09 Feb 2016 21:58:30 +0100
+
+kvm-in-a-box (0.2.0.1) jessie; urgency=medium
+
+  * Fix ssh config error.
+
+ -- Daniel Gröber <dxld@darkboxed.org>  Tue, 09 Feb 2016 21:58:25 +0100
 
 kvm-in-a-box (0.2.0.0) jessie; urgency=medium
 
