@@ -250,8 +250,12 @@ removeResources cfg opts@Options {..} vms hosts vmn = do
 
 setup :: Config -> Options -> State -> IO State
 setup cfg opts s = do
+    pro ["etckeeper", "-m", "kib: before 'kib setup'"]
     ensureResource (oRoot opts) sshdResource
     ensureResource (oRoot opts) sysctlResource
+    void $ system "addgroup --system kib"
+    void $ system "addgroup --system kib-admin"
+    pro ["etckeeper", "-m", "kib: after 'kib setup'"]
     return s
 
 commands :: Parser (Config -> Options -> State -> IO State)

@@ -1,0 +1,2 @@
+Cmnd_Alias KIB = /usr/sbin/kib
+%kib-admin ALL = (root) NOPASSWD: KIB
