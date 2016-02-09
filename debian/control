@@ -24,14 +24,6 @@ Build-Depends: debhelper (>= 9),
  libghc-unordered-containers-dev,
  libghc-uri-dev,
  libghc-doctest-dev,
- bridge-utils,
- iptables-persistent,
- sgabios,
- sudo,
- qemu,
- p7zip-full,
- socat,
- dnsmasq
 Standards-Version: 3.9.6
 X-Description: Single box KVM virtualization server
  A command line tool for easily managing virtual machines for multiple users.
@@ -41,6 +33,14 @@ Architecture: any
 Section: misc
 Depends: ${haskell:Depends},
  ${misc:Depends},
+ bridge-utils,
+ iptables-persistent,
+ sgabios,
+ sudo,
+ qemu,
+ p7zip-full,
+ socat,
+ dnsmasq
 Recommends: ${haskell:Recommends},
 Suggests: ${haskell:Suggests},
 Conflicts: ${haskell:Conflicts},
