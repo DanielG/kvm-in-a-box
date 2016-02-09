@@ -87,7 +87,7 @@ vmSysCfgP = VmSysCfgFlags
 
      <*> optional $$ some $$ strOption $$
                  long "ssh-key"
-            <<>> metavar "ssh-rsa AAAA ...."
+            <<>> metavar "\"ssh-rsa AAAA ....\""
             <<>> help "SSH public key string to add to VM console's authorized_keys"
 
 vmNetCfgP :: Parser VmNetCfgFlags
