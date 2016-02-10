@@ -17,7 +17,14 @@ vmInitResource vmn (cmd:args) = ManyResources [
       sfrPerms = ((Nothing, Nothing), Just "644"),
       sfrOwner = OwnerVm vmn,
       sfrNormalize = id,
-      sfrContent = service vmn $ "/usr/bin/env":"kib-supervise":("kib-"++vmn):cmd:args
+      sfrContent = runUnit vmn $ "/usr/sbinkib-supervise":cmd:args
+   },
+    SomeResource $ SimpleFileResource {
+      sfrPath = etcdir </> "systemd/user/kib-" <> vmn <> "-install@.service",
+      sfrPerms = ((Nothing, Nothing), Just "644"),
+      sfrOwner = OwnerVm vmn,
+      sfrNormalize = id,
+      sfrContent = installUnit vmn $ [ "/usr/sbin/kib-supervise", "kib", "install", vmn, "%i"]
    },
    SomeResource $ SimpleFileResource {
       sfrPath = "/var/lib/systemd/linger" </> ("kib-" ++ vmn),
@@ -28,13 +35,15 @@ vmInitResource vmn (cmd:args) = ManyResources [
    }
   ]
 
-service vmn (cmd:args) = "\
+runUnit vmn (cmd:args) = "\
  \[Unit]\n\
  \Description=Kvm-in-a-box VM: "++vmn++"\n\
  \After=kvm-in-a-box.target\n\
+ \Conflicts=kib-"++vmn++"-install\n\
  \\n\
  \[Service]\n\
  \ExecStart="++cmd++" "++(intercalate " " $ map (("'"++) . (++"'")) args)++"\n\
+ \KillMode=mixed\n\
  \Restart=on-failure\n\
  \RuntimeDirectory=kib-"++vmn++"\n\
  \StandardOutput=journal\n\
@@ -43,4 +52,17 @@ service vmn (cmd:args) = "\
  \[Install]\n\
  \WantedBy=default.target\n"
 
--- \User=kib-"++vmn++"\n\
+installUnit vmn (cmd:args) = "\
+ \[Unit]\n\
+ \Description=Kvm-in-a-box VM installation: "++vmn++"\n\
+ \After=kvm-in-a-box.target\n\
+ \Conflicts=kib-"++vmn++"\n\
+ \\n\
+ \[Service]\n\
+ \Type=oneshot\n\
+ \ExecStart="++cmd++" "++(intercalate " " $ map (("'"++) . (++"'")) args)++"\n\
+ \KillMode=mixed\n\
+ \Restart=on-failure\n\
+ \RuntimeDirectory=kib-"++vmn++"\n\
+ \StandardOutput=journal\n\
+ \StandardError=journal\n"

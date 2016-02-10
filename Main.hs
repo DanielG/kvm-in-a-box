@@ -67,7 +67,7 @@ infoCmd vmn cfg opts s@State {..} = do
 create :: VmName -> VmFlags -> Config -> Options -> State -> IO State
 create vmn vmf0 cfg opts s@State { sVms=sVms0 }
     | not $ vmn `Map.member` sVms0 = do
-        let vm = unVmFlags vmn $ combineVmFlags vmf0 defVmFlags
+        let vm = unVmFlags vmn $ combineVmFlags vmf0 (defVmFlags cfg)
             sVms1 = Map.insert vmn vm sVms0
         sNet <- ensureResources cfg opts sVms1
         return $ s { sVms = sVms1, sNet = sNet }
@@ -148,7 +148,7 @@ console' vmn = do
   hPutStrLn stderr "Type ^] (ASCII GS) to exit console."
   pro [ "socat",  "STDIO,raw,echo=0,escape=0x1d",  "UNIX-CONNECT:" ++ (varrundir uid </> "kib-" ++ vmn </> "ttyS0.unix") ]
 
-
+resources :: Config -> Options -> GroupEntry -> [(VmName, (MAC, IPv4))] -> Map VmName Vm -> IO ManyResources
 resources cfg@Config {..} Options {..} kibGrp hosts vms = do
     notTesting <- amNotTesting
     return $ ManyResources $ concat
@@ -192,7 +192,7 @@ resources cfg@Config {..} Options {..} kibGrp hosts vms = do
    mkSystemdR hosts =
                     Map.elems
                   $ Map.mapWithKey vmInitResource
-                  $ Map.map (\(vm, (mac,_ip)) -> qemu "%t" (Qemu [] False vm) mac)
+                  $ Map.map (\(vm, (mac,_ip)) -> qemu "%t" mac (Qemu [] False vm))
                   $ Map.intersectionWith (,) vms (Map.fromList hosts)
 
    dnsmasqR = ManyResources $
@@ -318,7 +318,6 @@ adminConsole user = do
   putStr "> "
   l <- dropWhileEnd isSpace . dropWhile isSpace <$> getLine
   case words l of
-    [""] -> console' vmn
     ["console"] -> console' vmn
     ["reset"] -> do
         pro [ "systemctl", "--user", "restart", user ]
@@ -341,13 +340,24 @@ adminConsole user = do
     ["enable"] -> do
         pro [ "systemctl", "--user", "enable", user ]
         adminConsole user
-    "install":"debian":[] ->
-        installDebian vmn Nothing
-    "install":"debian":"auto":[] ->
-        installDebian vmn $ Just $ usrsharedir </> "preseed.cfg"
-    -- "install":"debian":preseed:[] ->
-    --     installDebian vmn $ Just preseed
+    "install":"debian":[] -> do
+        pro [ "systemctl", "--user", "start", user ++ "-install@debian-manual" ]
+        console' vmn
+    "install":"debian":"auto":[] -> do
+        pro [ "systemctl", "--user", "start", user ++ "-install@debian-" ++ usrsharedir </> "preseed.cfg" ]
+        console' vmn
+    "install":"debian":preseed:[] -> do
+        pro [ "systemctl", "--user", "start", user ++ "-install@debian-" ++ preseed ]
+        console' vmn
     _ -> putStrLn "Unknown command" >> adminConsole user
+
+install user = do
+  pro [ "systemctl", "--user", "daemon-reload" ]
+  let 'k':'i':'b':'-':vmn = user
+  args <- getArgs
+  case args of
+    "debian":"manual":[] -> installDebian vmn Nothing
+    "debian":arg -> installDebian vmn $ listToMaybe arg
 
 installDebian :: VmName -> Maybe String -> IO ()
 installDebian vmn mfile = void $ do
@@ -357,23 +367,33 @@ installDebian vmn mfile = void $ do
     preseed <-
       case mfile of
         Just file -> do
-          rawSystem "cp" [file, tmp]
-          return $ " auto=true priority=critical url=tftp://10.0.2.2/" ++ takeFileName file
+          when (any (=='/') file) $ do
+            hPutStrLn stderr "invalid preeseed file name"
+            exitFailure
+
+          rawSystem "cp" ["--", file, tmp]
+          return $ unwords [ ""
+                           , "auto=true"
+                           , "priority=critical"
+                           , "url=tftp://10.0.2.2/" ++ takeFileName file
+                           ]
         Nothing -> return ""
 
-    rawSystem "7z" ["-o"++tmp, "x", iso, "install.amd"]
+    rawSystem "7z" [ "-o"++tmp, "x", iso, "install.amd" ]
     exists <- doesDirectoryExist $ tmp </> "install.amd"
-    when (not exists) $ error "Extracting Debian installer kernel+inird failed"
-    uid <- userID <$> getUserEntryForName ("kib-" ++ vmn)
-    let
-        vm = Vm vmn
-                defVmCfg
-                defVmSysCfg -- TODO: if vVg is different this is not reflected here
-                defVmNetCfg { vUserIf = True }
-                defVmQCfg { vCpus = 2, vMem = 1024 }
 
-        cmd:args' = flip (qemu (varrundir uid)) undefined
-                  $ Qemu [("tftp", tmp)] True vm
+    when (not exists) $
+      error "Extracting Debian installer kernel+inird failed"
+
+    uid <- getRealUserID
+
+    State { sVms, sNet } <- readState "/"
+
+    let Just net@(mac, ipv4) = Map.lookup vmn sNet
+        Just vm' = Map.lookup vmn sVms
+        vm  = vm' { vNetCfg = defVmNetCfg { vUserIf = True } }
+
+        cmd:args' = (qemu (varrundir uid)) mac $ Qemu [("tftp", tmp)] True vm
 
         args = args' ++ [ "-kernel", tmp </> "install.amd/vmlinuz"
                         , "-initrd", tmp </> "install.amd/initrd.gz"
@@ -381,15 +401,14 @@ installDebian vmn mfile = void $ do
                         , "-cdrom", iso
                         , "-boot", "d"
                         ]
-        primaryDisk = "/dev" </> (vVg $ vSysCfg vm) </> vmn
 
-    rv <- system "systemctl is-active"
+    rv <- rawSystem "systemctl" ["is-active", "kib-" ++ vmn]
     when (rv == ExitSuccess) $ do
          hPutStrLn stderr "VM is running, refusing to let you shoot yourself in the foot."
          exitFailure
 
     hPutStrLn stderr $ unwords $ cmd:args
-    rawSystem "flock" $ "-n":primaryDisk:cmd:args
+    rawSystem cmd args
 
 main = do
   prog <- getProgName
@@ -411,10 +430,14 @@ main = do
       putStrLn "  > install debian [PRESEED_URL]"
       putStrLn ""
 
-      adminConsole =<< getEnv "USER"
+      adminConsole =<< getLoginName
+
+    x | x == "kib-install" || x == "-kib-install"  -> do
+      hSetBuffering stdout NoBuffering
+      install =<< getLoginName
 
     "kib" -> do
       (opts, f) <- execParser $ info ((,) <$> optionsP <*> commands <**> helper) fullDesc
-      cfg <- readConfig opts
-      modifyState opts (f cfg opts)
+      cfg <- readConfig (oRoot opts)
+      modifyState (oRoot opts) (f cfg opts)
       return ()

@@ -18,7 +18,8 @@ data Qemu = Qemu {
       qVm :: Vm
     }
 
-qemu rundir Qemu { qVm = Vm { vName, vCfg = VmCfg {..}, vSysCfg = VmSysCfg {..}, vNetCfg = VmNetCfg {..}, vQCfg = VmQCfg {..} }, .. } mac = concat $ [
+qemu :: FilePath -> MAC -> Qemu -> [String]
+qemu rundir mac Qemu { qVm = Vm { vName, vCfg = VmCfg {..}, vSysCfg = VmSysCfg {..}, vNetCfg = VmNetCfg {..}, vQCfg = VmQCfg {..} }, .. } = concat $ [
   [arch vArch],
   ["-sandbox", "on"], -- seccomp yey
   ["-cpu", "host"],

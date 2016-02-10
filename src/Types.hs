@@ -13,6 +13,7 @@ import Data.List.Split
 import Data.Aeson.TH
 import Data.Aeson
 import Data.Text (unpack, pack)
+import Data.Maybe
 import Text.Read hiding (String)
 
 import Control.DeepSeq
@@ -32,7 +33,8 @@ data Config = Config {
       cAddress   :: Address IPv4,
       cAddress6  :: Address IPv6,
       cPrivate6  :: Address IPv6,
-      cGroup6    :: Address IPv6
+      cGroup6    :: Address IPv6,
+      cDefaultVg :: Maybe String
     } deriving Show
 
 type VmName = String
@@ -81,8 +83,7 @@ flagTH [d|
      } deriving (Eq, Ord, Show, Read, Generic)
  |]
 
-defVmSysCfg = VmSysCfg "vg0" [] []
-
+defVmSysCfg Config {..} = VmSysCfg (fromMaybe "vg0" cDefaultVg) [] []
 
 flagTH [d|
  -- | VM network configuration
@@ -145,9 +146,9 @@ mkVmFlags Vm {..} =
       (mkVmNetCfgFlags vNetCfg)
       (mkVmQCfgFlags vQCfg)
 
-defVm name = Vm name defVmCfg defVmSysCfg defVmNetCfg defVmQCfg
+defVm cfg name = Vm name defVmCfg (defVmSysCfg cfg) defVmNetCfg defVmQCfg
 
-defVmFlags = mkVmFlags $ defVm (error "defVmFlags: name undefined")
+defVmFlags cfg = mkVmFlags $ defVm cfg (error "defVmFlags: name undefined")
 
 data State = State {
       sVms :: Map VmName Vm,

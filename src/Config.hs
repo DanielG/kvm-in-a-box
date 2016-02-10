@@ -18,23 +18,24 @@ import Files
 import Options
 import IP
 
-readConfig :: Options -> IO Config
-readConfig opts = do
-  m <- SC.readConfig <$> readFile (rootRel (oRoot opts) configFile)
+readConfig :: FilePath -> IO Config
+readConfig root = do
+  m <- SC.readConfig <$> readFile (rootRel root configFile)
   let Just cfg = Config <$> get "domain" m
                         <*> get "upstream-interface" m
                         <*> (readIPRange <$> get "public-address" m)
                         <*> (readIPRange <$> get "public-address6" m)
                         <*> (readIPRange <$> get "private-address6" m)
                         <*> (readIPRange <$> get "group-address6" m)
+                        <*> pure (get "default-volume-group" m)
   return cfg
 
  where
    get k mp = dropWhile isSpace <$> SC.getValue k mp
 
-readState :: Options -> IO State
-readState opts = do
-  let file = rootRel (oRoot opts) stateFile
+readState :: FilePath -> IO State
+readState root = do
+  let file = rootRel root stateFile
   e <- doesFileExist file
   if not e
     then return defState
@@ -42,14 +43,14 @@ readState opts = do
       (_hdr:state:_) <- LBS8.lines <$> LBS.readFile file
       return $ either (error . (++) "parsing state: ") id $ eitherDecode state
 
-writeState :: Options -> State -> IO ()
-writeState opts s = do
-    let f = rootRel (oRoot opts) stateFile
+writeState :: FilePath -> State -> IO ()
+writeState root s = do
+    let f = rootRel root stateFile
     createDirectoryIfMissing True (takeDirectory f)
     writeFile'LBS f $ LBS.concat
       [ "kvm-in-a-box state format: v4\n", encode s, "\n" ]
 
-modifyState opts f = do
-  s <- readState opts
+modifyState root f = do
+  s <- readState root
   s' <- f s
-  writeState opts s'
+  writeState root s'
