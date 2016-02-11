@@ -17,14 +17,14 @@ vmInitResource vmn (cmd:args) = ManyResources [
       sfrPerms = ((Nothing, Nothing), Just "644"),
       sfrOwner = OwnerVm vmn,
       sfrNormalize = id,
-      sfrContent = runUnit vmn $ "/usr/sbinkib-supervise":cmd:args
+      sfrContent = runUnit vmn $ "/usr/sbin/kib-supervise":cmd:args
    },
     SomeResource $ SimpleFileResource {
       sfrPath = etcdir </> "systemd/user/kib-" <> vmn <> "-install@.service",
       sfrPerms = ((Nothing, Nothing), Just "644"),
       sfrOwner = OwnerVm vmn,
       sfrNormalize = id,
-      sfrContent = installUnit vmn $ [ "/usr/sbin/kib-supervise", "kib", "install", vmn, "%i"]
+      sfrContent = installUnit vmn $ [ "/usr/sbin/kib-install", "%i" ]
    },
    SomeResource $ SimpleFileResource {
       sfrPath = "/var/lib/systemd/linger" </> ("kib-" ++ vmn),
@@ -62,7 +62,6 @@ installUnit vmn (cmd:args) = "\
  \Type=oneshot\n\
  \ExecStart="++cmd++" "++(intercalate " " $ map (("'"++) . (++"'")) args)++"\n\
  \KillMode=mixed\n\
- \Restart=on-failure\n\
  \RuntimeDirectory=kib-"++vmn++"\n\
  \StandardOutput=journal\n\
  \StandardError=journal\n"

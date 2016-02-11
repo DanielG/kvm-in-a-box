@@ -344,7 +344,7 @@ adminConsole user = do
         pro [ "systemctl", "--user", "start", user ++ "-install@debian-manual" ]
         console' vmn
     "install":"debian":"auto":[] -> do
-        pro [ "systemctl", "--user", "start", user ++ "-install@debian-" ++ usrsharedir </> "preseed.cfg" ]
+        pro [ "systemctl", "--user", "start", user ++ "-install@debian-auto" ]
         console' vmn
     "install":"debian":preseed:[] -> do
         pro [ "systemctl", "--user", "start", user ++ "-install@debian-" ++ preseed ]
@@ -356,8 +356,14 @@ install user = do
   let 'k':'i':'b':'-':vmn = user
   args <- getArgs
   case args of
-    "debian":"manual":[] -> installDebian vmn Nothing
-    "debian":arg -> installDebian vmn $ listToMaybe arg
+    ["debian-manual"] -> installDebian vmn Nothing
+    ["debian-auto"] -> installDebian vmn $ Just $ usrsharedir </> "preseed.cfg"
+    [str] | Just file <- stripPrefix "debian-" str -> do
+      when (any (=='/') file) $ do
+        hPutStrLn stderr "invalid preeseed file name"
+        exitFailure
+
+      installDebian vmn $ Just $ "/home" </> user </> file
 
 installDebian :: VmName -> Maybe String -> IO ()
 installDebian vmn mfile = void $ do
@@ -367,10 +373,6 @@ installDebian vmn mfile = void $ do
     preseed <-
       case mfile of
         Just file -> do
-          when (any (=='/') file) $ do
-            hPutStrLn stderr "invalid preeseed file name"
-            exitFailure
-
           rawSystem "cp" ["--", file, tmp]
           return $ unwords [ ""
                            , "auto=true"
@@ -408,7 +410,7 @@ installDebian vmn mfile = void $ do
          exitFailure
 
     hPutStrLn stderr $ unwords $ cmd:args
-    rawSystem cmd args
+    rawSystem "kib-supervise" $ cmd:args
 
 main = do
   prog <- getProgName
@@ -434,7 +436,7 @@ main = do
 
     x | x == "kib-install" || x == "-kib-install"  -> do
       hSetBuffering stdout NoBuffering
-      install =<< getLoginName
+      install =<< getEnv "USER"
 
     "kib" -> do
       (opts, f) <- execParser $ info ((,) <$> optionsP <*> commands <**> helper) fullDesc

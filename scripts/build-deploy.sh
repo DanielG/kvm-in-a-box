@@ -15,7 +15,7 @@ EOF
 
 mv ${changelog}_ $changelog
 
-sbuild
+gbp buildpackage --git-export-dir=../build-area --git-builder=sbuild
 
 deb=$(ls -vr ../kvm-in-a-box_*.deb | head -n 1)
 
