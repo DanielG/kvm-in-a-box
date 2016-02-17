@@ -395,7 +395,7 @@ installDebian vmn mfile = void $ do
         Just vm' = Map.lookup vmn sVms
         vm  = vm' { vNetCfg = defVmNetCfg { vUserIf = True } }
 
-        cmd:args' = (qemu (varrundir uid)) mac $ Qemu [("tftp", tmp)] True vm
+        cmd:args' = (qemu (varrundir uid)) mac $ Qemu [("tftp", tmp)] False vm
 
         args = args' ++ [ "-kernel", tmp </> "install.amd/vmlinuz"
                         , "-initrd", tmp </> "install.amd/initrd.gz"
