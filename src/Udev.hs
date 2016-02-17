@@ -8,7 +8,7 @@ import Data.Maybe
 
 lvmOwnerResources :: [Vm] -> SomeResource
 lvmOwnerResources vms = SomeResource $ FileResource {
-    rPath = "/etc/udev/rules.d/50-kib.rules",
+    rPath = "/etc/udev/rules.d/60-kib.rules",
     rPerms = ((Nothing, Nothing), Just "644"),
     rNormalize = unlines . sort . lines,
     rParse = map own . parse,
