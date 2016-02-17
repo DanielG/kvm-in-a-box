@@ -13,7 +13,7 @@ lvmOwnerResources vms = SomeResource $ FileResource {
     rNormalize = unlines . sort . lines,
     rParse = map own . parse,
     rUnparse = unparse,
-    rContentFunc = \ls -> nub $ fromMaybe [] ls ++ map (own . rs) vms
+    rContentFunc = const $ map (own . rs) vms
   }
 
  where
