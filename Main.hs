@@ -134,19 +134,36 @@ start = systemctl "start"
 stop :: VmName -> Config -> Options -> State -> IO State
 stop = systemctl "stop"
 
-console :: VmName -> Config -> Options -> State -> IO State
-console vmn cfg opts s@State {sVms=sVms0} = do
+console :: VmName -> State -> IO ()
+console vmn State {sVms=sVms0} = do
   case Map.lookup vmn sVms0 of
     Nothing -> error $ "VM '"++vmn++"' does not exist."
     Just vm0 -> do
       console' vmn
-      return s
 
 console' vmn = do
   uid <- userID <$> getUserEntryForName ("kib-" ++ vmn)
+  let socket = (varrundir uid </> "kib-" ++ vmn </> "ttyS0.unix")
+
+  e <- doesFileExist socket
+  when (not e) $ hPutStrLn stderr $ "Waiting for " ++ socket ++ " to appear..."
+
+  handleJust (\ex@UserInterrupt -> Just ex) (\_ -> exitFailure) $
+    waitForFile socket
+
   hPutStrLn stderr "Type RET to get a prompt (serial console)"
   hPutStrLn stderr "Type ^] (ASCII GS) to exit console."
-  pro [ "socat",  "STDIO,raw,echo=0,escape=0x1d",  "UNIX-CONNECT:" ++ (varrundir uid </> "kib-" ++ vmn </> "ttyS0.unix") ]
+  pro [ "socat", "STDIO,raw,echo=0,escape=0x1d",  "UNIX-CONNECT:" ++ (varrundir uid </> "kib-" ++ vmn </> "ttyS0.unix") ]
+
+ where
+   waitForFile file = do
+     e <- doesFileExist file
+     if e
+       then return ()
+       else do
+         threadDelay 500000
+         waitForFile file
+
 
 resources :: Config -> Options -> GroupEntry -> [(VmName, (MAC, IPv4))] -> Map VmName Vm -> IO ManyResources
 resources cfg@Config {..} Options {..} kibGrp hosts vms = do
@@ -281,7 +298,7 @@ commands = subparser $ mconcat
       infoCmd <$> strArgument (metavar "NAME")
 
   , command "console" $ withInfo "Connect to VM serial console (socat)" $
-      console <$> strArgument (metavar "NAME")
+      stateless $ console <$> strArgument (metavar "NAME")
 
   , command "create" $ withInfo "Create a new VM" $
       create <$> strArgument (metavar "name") <*> vmP
@@ -307,6 +324,10 @@ commands = subparser $ mconcat
       pure setup
 
   ]
+ where
+   stateless :: Parser (State -> IO a)
+             -> Parser (Config -> Options -> State -> IO State)
+   stateless mf = (\f _cfg _opts s -> (const s) <$> f s) <$> mf
 
 withInfo :: String -> Parser a -> ParserInfo a
 withInfo desc opts = info opts $ progDesc desc
@@ -318,10 +339,10 @@ adminConsole user = do
   putStr "> "
   l <- dropWhileEnd isSpace . dropWhile isSpace <$> getLine
   case words l of
-    ["console"] -> console' vmn
+    ["console"] -> do
+        handle (\(_ :: ExitCode) -> return ()) $ console' vmn
     ["reset"] -> do
         pro [ "systemctl", "--user", "restart", user ]
-        threadDelay (500 * 1000)
         console' vmn
     ["status"] -> do
         pro_ [ "systemctl", "--user", "status", "--full", user ]
@@ -334,22 +355,55 @@ adminConsole user = do
         pro [ "systemctl", "--user", "stop", user ]
         pro_ [ "systemctl", "--user", "status", user ]
         adminConsole user
+    ["kill"] -> do
+        pro [ "systemctl", "--user", "kill", user ]
+        pro_ [ "systemctl", "--user", "status", user ]
+        adminConsole user
     ["disable"] -> do
         pro [ "systemctl", "--user", "disable", user ]
         adminConsole user
     ["enable"] -> do
         pro [ "systemctl", "--user", "enable", user ]
         adminConsole user
+
     "install":"debian":[] -> do
+        checkUnitConflict vmn
         pro [ "systemctl", "--user", "start", user ++ "-install@debian-manual" ]
         console' vmn
     "install":"debian":"auto":[] -> do
+        checkUnitConflict vmn
         pro [ "systemctl", "--user", "start", user ++ "-install@debian-auto" ]
         console' vmn
     "install":"debian":preseed:[] -> do
+        checkUnitConflict vmn
         pro [ "systemctl", "--user", "start", user ++ "-install@debian-" ++ preseed ]
         console' vmn
+    ["status-install"] -> do
+        pro_ [ "systemctl", "--user", "status", user ++ "-install@*" ]
+        adminConsole user
+    ["kill-install"] -> do
+        pro [ "systemctl", "--user", "stop", user ++ "-install@*" ]
+        pro_ [ "systemctl", "--user", "status", user ++ "-install@*" ]
+        adminConsole user
+
     _ -> putStrLn "Unknown command" >> adminConsole user
+
+
+checkUnitConflict vmn = do
+    let units = ["kib-"++vmn, "kib-"++vmn++"-install@*"]
+
+    let systemctlIs state u = rawSystem "systemctl" ["--user", "is-"++state, u]
+
+    rvs <- systemctlIs "failed" `mapM` units
+    when (any (== ExitSuccess) rvs) $ do
+         hPutStrLn stderr "Previous installations failed resetting status"
+         pro_ $ ["systemctl", "--user", "reset-failed"] ++ units
+
+    rvs <- systemctlIs "active" `mapM` units
+    print rvs
+    when (any (== ExitSuccess) rvs) $ do
+         hPutStrLn stderr "VM is running, refusing to let you shoot yourself in the foot."
+         exitFailure
 
 install user = do
   pro [ "systemctl", "--user", "daemon-reload" ]
@@ -404,11 +458,6 @@ installDebian vmn mfile = void $ do
                         , "-boot", "d"
                         ]
 
-    rv <- rawSystem "systemctl" ["is-active", "kib-" ++ vmn]
-    when (rv == ExitSuccess) $ do
-         hPutStrLn stderr "VM is running, refusing to let you shoot yourself in the foot."
-         exitFailure
-
     hPutStrLn stderr $ unwords $ cmd:args
     rawSystem "kib-supervise" $ cmd:args
 
@@ -426,10 +475,13 @@ main = do
       putStrLn "  > reset"
       putStrLn "  > start"
       putStrLn "  > stop"
+      putStrLn "  > kill"
       putStrLn "  > enable"
       putStrLn "  > disable"
       putStrLn "  > install debian auto"
       putStrLn "  > install debian [PRESEED_URL]"
+      putStrLn "  > status-install"
+      putStrLn "  > kill-install"
       putStrLn ""
 
       adminConsole =<< getLoginName

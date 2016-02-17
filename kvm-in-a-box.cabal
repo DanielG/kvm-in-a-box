@@ -35,6 +35,7 @@ executable kib
                      , unix
                      , filepath
                      , transformers
+                     , mtl
                      , split
                      , pretty-show
                      , deepseq

@@ -30,11 +30,16 @@ pro (cmd:args) = do
   res <- callProcess Nothing cmd args
   case res of
     ExitSuccess -> return ()
+    ExitFailure rv -> do
+        hPutStrLn stderr $ "command failed '" ++ intercalate " " (map prettyShow $ cmd:args) ++ "' (exit code "++ show rv ++")"
+        exitWith res
+
+pro_ (cmd:args) = do
+  res <- callProcess Nothing cmd args
+  case res of
+    ExitSuccess -> return ()
     ExitFailure rv ->
         hPutStrLn stderr $ "command failed '" ++ intercalate " " (map prettyShow $ cmd:args) ++ "' (exit code "++ show rv ++")"
-
-pro_ (cmd:args) =
-  void $ callProcess Nothing cmd args
 
 prettyShow x | any isSpace x = show x
              | otherwise = x

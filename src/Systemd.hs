@@ -10,14 +10,14 @@ import Files
 import Types
 
 vmInitResource :: VmName -> [String] -> ManyResources
-vmInitResource vmn (cmd:args) = ManyResources [
+vmInitResource vmn qemu_args = ManyResources [
     SomeResource $ SimpleFileResource {
     -- /etc/systemd/user
       sfrPath = etcdir </> "systemd/user/kib-" <> vmn <.> "service",
       sfrPerms = ((Nothing, Nothing), Just "644"),
       sfrOwner = OwnerVm vmn,
       sfrNormalize = id,
-      sfrContent = runUnit vmn $ "/usr/sbin/kib-supervise":cmd:args
+      sfrContent = runUnit vmn $ "/usr/sbin/kib-supervise":qemu_args
    },
     SomeResource $ SimpleFileResource {
       sfrPath = etcdir </> "systemd/user/kib-" <> vmn <> "-install@.service",
@@ -34,34 +34,34 @@ vmInitResource vmn (cmd:args) = ManyResources [
       sfrContent = ""
    }
   ]
+ where
 
-runUnit vmn (cmd:args) = "\
- \[Unit]\n\
- \Description=Kvm-in-a-box VM: "++vmn++"\n\
- \After=kvm-in-a-box.target\n\
- \Conflicts=kib-"++vmn++"-install\n\
- \\n\
- \[Service]\n\
- \ExecStart="++cmd++" "++(intercalate " " $ map (("'"++) . (++"'")) args)++"\n\
- \KillMode=mixed\n\
- \Restart=on-failure\n\
- \RuntimeDirectory=kib-"++vmn++"\n\
- \StandardOutput=journal\n\
- \StandardError=journal\n\
- \\n\
- \[Install]\n\
- \WantedBy=default.target\n"
+   runUnit vmn (cmd:args) = "\
+     \[Unit]\n\
+     \Description=Kvm-in-a-box VM: "++vmn++"\n\
+     \After=kvm-in-a-box.target\n\
+     \\n\
+     \[Service]\n\
+     \ExecStart="++cmd++" "++(intercalate " " $ map (("'"++) . (++"'")) args)++"\n\
+     \KillMode=mixed\n\
+     \Restart=on-failure\n\
+     \RuntimeDirectory=kib-"++vmn++"\n\
+     \StandardOutput=journal\n\
+     \StandardError=journal\n\
+     \\n\
+     \[Install]\n\
+     \WantedBy=default.target\n"
 
-installUnit vmn (cmd:args) = "\
- \[Unit]\n\
- \Description=Kvm-in-a-box VM installation: "++vmn++"\n\
- \After=kvm-in-a-box.target\n\
- \Conflicts=kib-"++vmn++"\n\
- \\n\
- \[Service]\n\
- \Type=oneshot\n\
- \ExecStart="++cmd++" "++(intercalate " " $ map (("'"++) . (++"'")) args)++"\n\
- \KillMode=mixed\n\
- \RuntimeDirectory=kib-"++vmn++"\n\
- \StandardOutput=journal\n\
- \StandardError=journal\n"
+   installUnit vmn (cmd:args) = "\
+     \[Unit]\n\
+     \Description=Kvm-in-a-box VM installation: "++vmn++"\n\
+     \After=kvm-in-a-box.target\n\
+     \Conflicts=kib-"++vmn++".service\n\
+     \\n\
+     \[Service]\n\
+     \Type=simple\n\
+     \ExecStart="++cmd++" "++(intercalate " " $ map (("'"++) . (++"'")) args)++"\n\
+     \KillMode=mixed\n\
+     \RuntimeDirectory=kib-"++vmn++"\n\
+     \StandardOutput=journal\n\
+     \StandardError=journal\n"
