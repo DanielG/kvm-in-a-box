@@ -52,6 +52,7 @@ executable kib
                      , bifunctors
                      , QuickCheck
                      , bytestring
+                     , dbus
 
 --                     , iproute -- inlined deps:
                      , network
