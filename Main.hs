@@ -15,6 +15,7 @@ import System.IO
 import System.IO.Temp
 import System.Exit
 import Control.Monad
+import Control.Arrow
 import Control.DeepSeq
 import Control.Exception
 import Control.Concurrent
@@ -53,6 +54,7 @@ import Udev
 import Log
 import Sysctl
 import Iptables
+import SystemdDBus
 
 list :: Config -> Options -> State -> IO State
 list cfg opts s@State {..} = do
@@ -390,20 +392,24 @@ adminConsole user = do
 
 
 checkUnitConflict vmn = do
-    let units = ["kib-"++vmn, "kib-"++vmn++"-install@*"]
+    let vmUnit = "kib-"++vmn
+        installUnit = "kib-"++vmn++"-install@"
 
-    let systemctlIs state u = rawSystem "systemctl" ["--user", "is-"++state, u]
+    addr <- userInstanceAddress
 
-    rvs <- systemctlIs "failed" `mapM` units
-    when (any (== ExitSuccess) rvs) $ do
-         hPutStrLn stderr "Previous installations failed resetting status"
-         pro_ $ ["systemctl", "--user", "reset-failed"] ++ units
+    units <- listUnits addr
 
-    rvs <- systemctlIs "active" `mapM` units
-    print rvs
-    when (any (== ExitSuccess) rvs) $ do
+    let fail = do
          hPutStrLn stderr "VM is running, refusing to let you shoot yourself in the foot."
          exitFailure
+
+    case find ((==vmUnit) . getUnitName) units of
+      Just (getUnitActiveState -> "active") -> fail
+      _ -> return ()
+
+    case find ((installUnit `isPrefixOf`) . getUnitName) units of
+      Just (getUnitActiveState -> "active") -> fail
+      _ -> return ()
 
 install user = do
   pro [ "systemctl", "--user", "daemon-reload" ]

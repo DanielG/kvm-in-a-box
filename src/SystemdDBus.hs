@@ -6,6 +6,10 @@ import Data.Maybe
 import DBus
 import DBus.Client
 
+import System.Posix.User
+import System.Environment
+import System.FilePath
+
 type SystemdUnit =
     ( String
     , String
@@ -18,6 +22,19 @@ type SystemdUnit =
     , String
     , ObjectPath)
 
+xdgRuntimeDir = do
+  maybe guess return =<< lookupEnv "XDG_RUNTIME_DIR"
+ where
+   guess = do
+     uid <- getRealUserID
+     return $ "/run/user/"++show uid
+
+userInstanceAddress :: IO Address
+userInstanceAddress = do
+  rundir <- xdgRuntimeDir
+  let Just addr = parseAddress $ "unix:path=" ++ (rundir </> "systemd/private")
+  return addr
+
 listUnits :: Address -> IO [SystemdUnit]
 listUnits addr = do
   c <- connect addr
@@ -29,3 +46,7 @@ listUnits addr = do
 getUnitActiveState :: SystemdUnit -> String
 getUnitActiveState (name,_,load_state,active_state,sub_state,_,_,_,_,_) =
     active_state
+
+getUnitName :: SystemdUnit -> String
+getUnitName (name,_,load_state,active_state,sub_state,_,_,_,_,_) =
+    name
