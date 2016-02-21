@@ -1,3 +1,10 @@
+kvm-in-a-box (3) jessie; urgency=medium
+
+  * Cleanup kib-supervise and support option reloading by restarting
+  * Add check for running VM/install to console install command
+
+ -- Daniel Gröber <dxld@darkboxed.org>  Sun, 21 Feb 2016 17:28:10 +0100
+
 kvm-in-a-box (2) jessie; urgency=medium
 
   * New upstream release
