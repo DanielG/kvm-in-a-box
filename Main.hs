@@ -40,7 +40,6 @@ import Types
 import Options
 import Iface
 import Resource
-import Lvm
 import Utils
 import Qemu
 import Config
@@ -117,6 +116,28 @@ change vmn vmf cfg opts s@State {sVms=sVms0} = do
 --       setOwnerAndGroup dotssh uid gid
 
 --       return s
+
+lvcreate vmn size msub s@State {..} =
+  case Map.lookup vmn sVms of
+    Nothing -> error $ "VM '"++vmn++"' does not exist."
+    Just Vm { vSysCfg = VmSysCfg{..} } ->
+        let vol = fromMaybe vmn $ ((vmn ++ "-") ++) <$> msub in
+        exitWith =<< rawSystem "lvcreate" ["-n", vol, "-L", size, vVg]
+
+lvremove vmn msub s@State {..} =
+  case Map.lookup vmn sVms of
+    Nothing -> error $ "VM '"++vmn++"' does not exist."
+    Just Vm { vSysCfg = VmSysCfg{..} } ->
+        let vol = fromMaybe vmn $ ((vmn ++ "-") ++) <$> msub in
+        exitWith =<< rawSystem "lvremove" ["/dev" </> vVg </> vol]
+
+lvextend vmn size msub s@State {..} =
+  case Map.lookup vmn sVms of
+    Nothing -> error $ "VM '"++vmn++"' does not exist."
+    Just Vm { vSysCfg = VmSysCfg{..} } ->
+        let vol = fromMaybe vmn $ ((vmn ++ "-") ++) <$> msub in
+        exitWith =<< rawSystem "lvcreate" ["-L", "/dev" </> vVg </> vol]
+
 
 systemctl :: String -> VmName -> Config -> Options -> State -> IO State
 systemctl cmd vmn cfg opts s@State {..} =
@@ -311,6 +332,21 @@ commands = subparser $ mconcat
   , command "change" $ withInfo "Change an existing VM" $
       change <$> strArgument (metavar "NAME") <*> vmP
 
+  , command "lv" $ withInfo "volume management" $ (helper <*>) $
+      subparser $ mconcat [
+        command "create" $ withInfo "Create logical volume" $ (helper <*>) $
+          stateless $ lvcreate <$> strArgument (metavar "NAME")
+                               <*> strArgument (metavar "SIZE")
+                               <*> subvolOpt
+      , command "extend" $ withInfo "Resize logical volume" $ (helper <*>) $
+          stateless $ lvextend <$> strArgument (metavar "NAME")
+                               <*> strArgument (metavar "SIZE")
+                               <*> subvolOpt
+      , command "remove" $ withInfo "Remove logical volume" $ (helper <*>) $
+          stateless $ lvremove <$> strArgument (metavar "NAME")
+                               <*> subvolOpt
+      ]
+
   -- See "--ssh-key" option
   -- , command "authorize" $ withInfo "Add an authorized SSH public key to a VM" $
   --     authorize <$> strArgument (metavar "NAME") <*> strArgument (metavar "KEY")
@@ -330,6 +366,11 @@ commands = subparser $ mconcat
    stateless :: Parser (State -> IO a)
              -> Parser (Config -> Options -> State -> IO State)
    stateless mf = (\f _cfg _opts s -> (const s) <$> f s) <$> mf
+
+   subvolOpt = optional $ strOption $
+                    long "subvol"
+               <<>> metavar "SUBVOL"
+               <<>> help "Operate on a subvolume instead of the main"
 
 withInfo :: String -> Parser a -> ParserInfo a
 withInfo desc opts = info opts $ progDesc desc
