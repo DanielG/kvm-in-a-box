@@ -1,3 +1,9 @@
+kvm-in-a-box (4) jessie; urgency=medium
+
+  * New upstream release
+
+ -- Daniel Gröber <dxld@darkboxed.org>  Thu, 03 Mar 2016 20:30:30 +0100
+
 kvm-in-a-box (3) jessie; urgency=medium
 
   * Cleanup kib-supervise and support option reloading by restarting
