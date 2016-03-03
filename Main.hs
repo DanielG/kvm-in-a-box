@@ -5,11 +5,10 @@ import qualified Language.Haskell.TH.Syntax as TH (qRunIO, lift)
 import Options.Applicative
 import Options.Applicative.Types
 import System.Directory
-import System.Process
+import System.Process hiding (system, rawSystem)
 import System.Environment
 import System.Posix.User
 import System.Posix.Files
-import System.Process
 import System.FilePath
 import System.IO
 import System.IO.Temp

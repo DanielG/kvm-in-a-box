@@ -9,7 +9,7 @@ import Data.Bool
 import Data.Maybe
 import Data.IP
 import System.Directory
-import System.Process
+import System.Process hiding (system, rawSystem)
 import System.FilePath
 import System.Exit
 import System.IO.Error

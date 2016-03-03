@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings, TupleSections #-}
 import System.IO
 import System.Exit
-import System.Process
+import System.Process hiding (system, rawSystem)
 import System.Environment
 import System.Directory
 import System.Posix.User

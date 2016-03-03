@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 module Utils where
 
 import Control.Monad
@@ -15,7 +16,7 @@ import Data.Bifunctor (Bifunctor, bimap)
 import Data.Functor.Identity
 import qualified Data.Map as Map
 import System.Exit
-import System.Process hiding (callProcess)
+import System.Process hiding (callProcess, system, rawSystem)
 import System.IO.Temp
 import System.IO
 import System.Environment
@@ -25,6 +26,24 @@ import System.Posix.User
 import System.Posix.Files
 import System.Posix.Types
 import Prelude
+
+system cmd = do
+    (_,_,_,p) <- createProcess (shell cmd) {
+#if MIN_VERSION_process(1,2,0)
+                   delegate_ctlc = True,
+#endif
+                   close_fds = True
+                 }
+    waitForProcess p
+
+rawSystem cmd args = do
+    (_,_,_,p) <- createProcess (proc cmd args) {
+#if MIN_VERSION_process(1,2,0)
+                   delegate_ctlc = True,
+#endif
+                   close_fds = True
+                 }
+    waitForProcess p
 
 pro (cmd:args) = do
   res <- callProcess Nothing cmd args

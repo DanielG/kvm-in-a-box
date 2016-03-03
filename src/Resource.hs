@@ -14,7 +14,7 @@ import System.Directory
 import System.Posix.Files
 import System.Posix.Types
 import System.Posix.User
-import System.Process
+import System.Process hiding (system, rawSystem)
 import System.FilePath
 
 import Log
