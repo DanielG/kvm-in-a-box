@@ -35,6 +35,7 @@ shellEscape str = intercalate "'\"'\"'" $ splitOn "'" str
 kib = "../dist/build/kib/kib"
 
 main = do
+  System.Environment.setEnv "KIB_TESTING" "1"
   let common = "data" </> "common"
       test_groups = [ "data/clean-system"
                     , "data/full-system"

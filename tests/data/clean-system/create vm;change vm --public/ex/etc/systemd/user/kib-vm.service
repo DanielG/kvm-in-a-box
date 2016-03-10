@@ -3,7 +3,8 @@ Description=Kvm-in-a-box VM: vm
 After=kvm-in-a-box.target
 
 [Service]
-ExecStart=/usr/bin/env 'kib-supervise' 'kib-vm' '/usr/bin/qemu-system-x86_64' '-sandbox' 'on' '-cpu' 'host' '-machine' 'pc,accel=kvm' '-nographic' '-vga' 'none' '-option-rom' '/usr/share/qemu/sgabios.bin' '-monitor' 'unix:%t/kib-vm/monitor.unix,server,nowait' '-serial' 'unix:%t/kib-vm/ttyS0.unix,server,nowait' '-qmp' 'stdio' '-smp' '1' '-m' '512' '-drive' 'file=/dev/vg0/vm,id=hdd0,format=raw' '-device' 'virtio-scsi-pci' '-net' 'none' '-net' 'nic,vlan=0,macaddr=02:00:00:00:00:01,model=virtio' '-net' 'tap,vlan=0,ifname=kipubr-vm,script=no,downscript=no'
+ExecStart=/usr/sbin/kib-supervise '/usr/bin/qemu-system-x86_64' '-sandbox' 'on' '-cpu' 'host' '-machine' 'pc,accel=kvm' '-nographic' '-vga' 'none' '-option-rom' '/usr/share/qemu/sgabios.bin' '-monitor' 'unix:%t/kib-vm/monitor.unix,server,nowait' '-serial' 'unix:%t/kib-vm/ttyS0.unix,server,nowait' '-qmp' 'stdio' '-smp' '1' '-m' '512' '-drive' 'file=/dev/vg0/vm,id=hdd0,format=raw' '-device' 'virtio-scsi-pci' '-net' 'none' '-net' 'nic,vlan=0,macaddr=02:00:00:00:00:01,model=virtio' '-net' 'tap,vlan=0,ifname=kipubr-vm,script=no,downscript=no'
+KillMode=mixed
 Restart=on-failure
 RuntimeDirectory=kib-vm
 StandardOutput=journal

@@ -1,0 +1,12 @@
+[Unit]
+Description=Kvm-in-a-box VM installation: vm
+After=kvm-in-a-box.target
+Conflicts=kib-vm.service
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/kib-install '%i'
+KillMode=mixed
+RuntimeDirectory=kib-vm
+StandardOutput=journal
+StandardError=journal
