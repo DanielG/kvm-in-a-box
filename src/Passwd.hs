@@ -58,7 +58,7 @@ passwdResource vmns kibGrp = ManyResources $ [
     rParse = map markPwd . parsePwd,
     rUnparse = unparsePwd :: [PasswdEntry] -> String,
 
-    rContentFunc = map markPwd . passwdDb vmns kibGrp . map snd . fromMaybe []
+    rContentFunc = map markPwd . passwdDb vmns kibGrp . map snd . fromJustNote "passwdResource:passwd"
   },
   SomeResource $ FileResource {
     rPath = etcdir </> "shadow",
@@ -68,7 +68,7 @@ passwdResource vmns kibGrp = ManyResources $ [
     rParse = map markShd . parseShd,
     rUnparse = unparseShd :: [ShadowEntry] -> String,
 
-    rContentFunc = map markShd . shadowDb vmns . map snd . fromMaybe []
+    rContentFunc = map markShd . shadowDb vmns . map snd . fromJustNote "passwdResource:shadow"
   },
   SomeResource $ FileResource {
     rPath = etcdir </> "group",
@@ -79,7 +79,7 @@ passwdResource vmns kibGrp = ManyResources $ [
     rParse = map markGrp . parseGrp,
     rUnparse = unparseGrp :: [GroupEntry] -> String,
 
-    rContentFunc = map markGrp . groupDb vmns . map snd . fromMaybe []
+    rContentFunc = map markGrp . groupDb vmns . map snd . fromJustNote "passwdResource:group"
   }
  ] ++ map homeDirectoryResource vmns
 
