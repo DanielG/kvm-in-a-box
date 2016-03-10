@@ -245,13 +245,9 @@ listResources cfg@Config {..} opts@Options {..} s@State { sVms=vms } = do
     hosts <- allocateHosts oRoot cAddress vmns
 
     rs <- resources cfg opts kibGrp hosts vms
+    os <- resourceOwners oRoot rs
 
-    mapM putStrLn $ resourcePaths rs
-
-    putStrLn "" >> putStrLn ""
-
-    -- TODO: root
-    mapM (putStrLn . show) =<< resourceOwners oRoot rs
+    mapM_ print $ resourcePaths rs `zip` os
 
     return s
 
