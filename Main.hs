@@ -138,8 +138,8 @@ lvextend vmn size msub s@State {..} =
         exitWith =<< rawSystem "lvcreate" ["-L", "/dev" </> vVg </> vol]
 
 
-systemctl :: String -> VmName -> Config -> Options -> State -> IO State
-systemctl cmd vmn cfg opts s@State {..} =
+systemctl :: String -> [String] -> VmName -> Config -> Options -> State -> IO State
+systemctl cmd args vmn cfg opts s@State {..} =
   case Map.lookup vmn sVms of
     Nothing -> error $ "VM '"++vmn++"' does not exist."
     Just _ -> do
@@ -147,14 +147,17 @@ systemctl cmd vmn cfg opts s@State {..} =
       uid <- userID <$> getUserEntryForName user
       let sudo = [ "sudo", "-u", user, "XDG_RUNTIME_DIR=" ++ varrundir uid ]
       pro $ sudo ++ [ "systemctl", "--user", "daemon-reload" ]
-      pro $ sudo ++ [ "systemctl", "--user", cmd, user ]
+      pro $ sudo ++ [ "systemctl", "--user", cmd, user ] ++ args
       return s
 
 start :: VmName -> Config -> Options -> State -> IO State
-start = systemctl "start"
+start = systemctl "start" []
 
 stop :: VmName -> Config -> Options -> State -> IO State
-stop = systemctl "stop"
+stop = systemctl "stop" []
+
+status :: VmName -> Config -> Options -> State -> IO State
+status = systemctl "status" ["--full"]
 
 console :: VmName -> State -> IO ()
 console vmn State {sVms=sVms0} = do
@@ -351,6 +354,9 @@ commands = subparser $ mconcat
 
   , command "stop" $ withInfo "Stop an existing VM" $
       stop <$> strArgument (metavar "NAME")
+
+  , command "status" $ withInfo "Show VM status" $
+      status <$> strArgument (metavar "NAME")
 
   -- TODO: no need for a seperate command
   , command "setup" $ withInfo "Perform initial envirnment configuration" $
