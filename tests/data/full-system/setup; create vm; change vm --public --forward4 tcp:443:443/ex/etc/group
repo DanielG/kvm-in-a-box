@@ -47,3 +47,5 @@ ssh:x:108:
 user:x:1000:
 systemd-journal:x:109:
 scanner:x:110:saned,user
+kvm::5000:kib-vm
+kib::5001:kib-vm

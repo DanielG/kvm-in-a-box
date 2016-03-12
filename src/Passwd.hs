@@ -7,6 +7,7 @@ import Data.List.Split
 import Data.Either
 import Data.Word
 import Data.Maybe
+import Data.Function
 
 import System.FilePath
 import System.Posix.Types
@@ -58,7 +59,7 @@ passwdResource vmns kibGrp = ManyResources $ [
     rParse = map markPwd . parsePwd,
     rUnparse = unparsePwd :: [PasswdEntry] -> String,
 
-    rContentFunc = map markPwd . passwdDb vmns kibGrp . map snd . fromJustNote "passwdResource:passwd"
+    rContentFunc = map markPwd . makePasswdDb vmns kibGrp . map snd . fromJustNote "passwdResource:passwd file missing"
   },
   SomeResource $ FileResource {
     rPath = etcdir </> "shadow",
@@ -68,7 +69,7 @@ passwdResource vmns kibGrp = ManyResources $ [
     rParse = map markShd . parseShd,
     rUnparse = unparseShd :: [ShadowEntry] -> String,
 
-    rContentFunc = map markShd . shadowDb vmns . map snd . fromJustNote "passwdResource:shadow"
+    rContentFunc = map markShd . makeShadowDb vmns . map snd . fromJustNote "passwdResource:shadow file missing"
   },
   SomeResource $ FileResource {
     rPath = etcdir </> "group",
@@ -79,7 +80,7 @@ passwdResource vmns kibGrp = ManyResources $ [
     rParse = map markGrp . parseGrp,
     rUnparse = unparseGrp :: [GroupEntry] -> String,
 
-    rContentFunc = map markGrp . groupDb vmns . map snd . fromJustNote "passwdResource:group"
+    rContentFunc = map markGrp . makeGroupDb vmns . map snd . fromJustNote "passwdResource:group file missing"
   }
  ] ++ map homeDirectoryResource vmns
 
@@ -88,7 +89,7 @@ homeDirectoryResource vmn =
     SomeResource $ DirectoryResource {
       fmrPath = homedir </> "kib-" ++ vmn,
       fmrPerms = ((Just $ "kib-" ++ vmn, Just "kib"), Just "755"),
-      fmrOwner = OwnerKib
+      fmrOwner = OwnerVm vmn
     }
 
 markPwd x
@@ -109,19 +110,18 @@ isKibUser u = ("kib-" `isPrefixOf`) . u
 unUid (CUid x) = x
 unGid (CGid x) = x
 
-nextId :: (Num a, Ord a) => [a] -> a
-nextId uids =
-    if next >= 65533
+checkId :: (Num a, Ord a) => a -> a
+checkId uid =
+    if uid >= 65533
       then error "Out of U/GIDs!"
-      else next
+      else uid
 
- where
-   next =
+nextId uids = checkId $
     (+1) $ foldr max 4999
          $ filter (< 65534)
          $ filter (>=5000) uids
 
-passwdDb vmns kibGrp db = let
+makePasswdDb vmns kibGrp db = let
     nextUid :: UserID
     nextUid = nextId $ map peUID db
 
@@ -158,7 +158,7 @@ passwdDb vmns kibGrp db = let
            peShell = "/usr/sbin/kib-console"
        }
 
-shadowDb vmns db = let
+makeShadowDb vmns db = let
     (others, _kib) = partitionEithers $ map kibUser db
   in
     others ++ map shadow vmns
@@ -181,13 +181,28 @@ shadowDb vmns db = let
            seReserved          = ""
        }
 
-groupDb :: [String] -> [GroupEntry] -> [GroupEntry]
-groupDb vmns db =
-    case partition ((=="kvm") . geName) db of
-    ([kvm], others) ->
-        others ++ [kvm { geUserList = map ("kib-"++) vmns }]
-    ([], others) ->
-        others ++ [GroupEntry "kib" "" (nextId $ map geGID db) (map ("kib-"++) vmns)]
+makeGroupDb :: [String] -> [GroupEntry] -> [GroupEntry]
+makeGroupDb vmns db = let
+    gid0 = nextId $ map geGID db
+    groups0 = [ \gid -> GroupEntry "kvm" "" gid []
+              , \gid -> GroupEntry "kib" "" gid []
+              ]
+    groups1 = map (uncurry ($)) $ groups0 `zip` (map checkId $ iterate (+1) gid0)
+    addMembers = modifyGeUsers $ \users -> nub $ users ++ map ("kib-"++) vmns
+    groups2 = modifyGeElems addMembers ["kvm", "kib"] groups1
+  in
+    nubBy ((==) `on` geName) $ db ++ groups2
+
+modifyGeUsers f ge = ge { geUserList = f (geUserList ge) }
+
+modifyGeElems :: (GroupEntry -> GroupEntry) -> [String] -> [GroupEntry] -> [GroupEntry]
+modifyGeElems f ks ges = map snd $ modifyElems f ks $ map (geName &&& id) ges
+
+modifyElems :: Eq k => (a -> a) -> [k] -> [(k,a)] -> [(k,a)]
+modifyElems f ks (ka@(k,a):kas)
+    | [k] == ks = (k, f a):kas
+    | k `elem` ks = (k, f a) : modifyElems f (drop 1 ks) kas
+    | otherwise = ka : modifyElems f ks kas
 
 unparse :: (a -> String) -> [a] -> String
 unparse fn = unlines . map fn
