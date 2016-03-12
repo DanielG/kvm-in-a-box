@@ -54,7 +54,7 @@ defaultFilePerms = ((Nothing, Nothing), Nothing)
 class ResourceC r where
     ensureResource :: FilePath -> r -> IO ()
     removeResource :: FilePath -> Maybe ResourceOwner -> r -> IO ()
-    resourceOwners :: FilePath -> r -> IO [ResourceOwner]
+    resourceOwners :: FilePath -> r -> IO [[ResourceOwner]]
     resourcePaths  :: r -> [FilePath]
 
 data SimpleFileResource =
@@ -167,7 +167,7 @@ instance FromOwned a => ResourceC (FileResource a) where
     mfs <- mapM readFileMaybe paths
     let ctx = [ (p, f) | (p, Just f) <- paths `zip` mfs ]
 
-    return $ do
+    return $ return $ do
       (cf, p, mf) <- zip3 rContentFuncs paths mfs
 
       case mf of
@@ -213,8 +213,8 @@ instance ResourceC FileMetaResource where
       | otherwise = return ()
 
 
-  resourceOwners r DirectoryResource {fmrOwner} = return [fmrOwner]
-  resourceOwners r SymlinkResource {fmrOwner} = return [fmrOwner]
+  resourceOwners r DirectoryResource {fmrOwner} = return [[fmrOwner]]
+  resourceOwners r SymlinkResource {fmrOwner} = return [[fmrOwner]]
 
   resourcePaths (DirectoryResource {fmrPath}) = ["dir:" ++ fmrPath]
   resourcePaths (SymlinkResource {fmrPath}) = ["sym:" ++ fmrPath]
