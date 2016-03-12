@@ -268,6 +268,7 @@ ensureResources cfg@Config {..} opts@Options {..} vms = do
 
     unlessTesting $ do
       void $ system "/etc/init.d/netfilter-persistent reload"
+      void $ system "/etc/init.d/dnsmasq reload"
 
     return $ Map.fromList hosts
 
