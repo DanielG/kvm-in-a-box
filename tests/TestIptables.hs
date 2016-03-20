@@ -23,7 +23,7 @@ main = do
               defVmNetCfg { vPublicIf = True, vForwardedPorts4 = [ (TCP, (443, 443))
                                                                  , (UDP, (553, 53))] }
               defVmQCfg
-  let is' = updateTables IPvv4 cfg (mkIface "kipubr") [vm] (Map.fromList [("foo", (undefined, readIP "10.10.10.10"))]) is
+  let is' = updateTables IPvv4 cfg (mkIface "kpu") [vm] (Map.fromList [("foo", (undefined, readIP "10.10.10.10"))]) is
   let ppis = unparse is'
   print is'
   hPutStrLn stderr ppis

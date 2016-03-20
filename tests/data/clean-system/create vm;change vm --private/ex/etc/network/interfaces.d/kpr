@@ -1,0 +1,12 @@
+auto kpr
+iface kpr inet static
+  bridge_ports   kpr-vm
+  bridge_stp     off
+  bridge_maxwait 0
+  bridge_fd      0
+  pre-up ip tuntap add dev kpr-vm mode tap user kib-vm
+  pre-up ip link set kpr-vm up
+  up ip -6 addr add fd13:5b76:af07::2/64 dev kpr
+  down ip -6 addr del fd13:5b76:af07::2/64 dev kpr
+  post-down ip link set kpr-vm down
+  post-down ip tuntap del dev kpr-vm mode tap

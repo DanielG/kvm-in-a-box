@@ -11,10 +11,10 @@
 -A INPUT -i lo -j ACCEPT
 -A INPUT -p tcp --dport=22 -j ACCEPT
 -A INPUT -j KIB_INPUT
--A KIB_FORWARD -i eth0 -o kipubr -j ACCEPT
--A KIB_FORWARD -i kipubr -o eth0 -j ACCEPT
--A KIB_INPUT -i kipubr -p udp -m udp --dport "67:68" -j ACCEPT
--A KIB_INPUT -i kipubr -p udp -m udp --dport "53" -j ACCEPT
+-A KIB_FORWARD -i eth0 -o kpu -j ACCEPT
+-A KIB_FORWARD -i kpu -o eth0 -j ACCEPT
+-A KIB_INPUT -i kpu -p udp -m udp --dport "67:68" -j ACCEPT
+-A KIB_INPUT -i kpu -p udp -m udp --dport "53" -j ACCEPT
 -A FORWARD -j KIB_FORWARD
 -A OUTPUT -j KIB_OUTPUT
 COMMIT

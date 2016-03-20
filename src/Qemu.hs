@@ -39,8 +39,8 @@ qemu rundir mac Qemu { qVm = Vm { vName, vCfg = VmCfg {..}, vSysCfg = VmSysCfg {
   concat $ map (\(i, n) -> disk i ("/dev" </> vVg </> n) Nothing) $ [0..] `zip` (vName : map ((vName ++ "-")++) vAddDisks),
   ["-net", "none"],
   vUserIf    ==> userNet "virtio" 2 qUserIfOpts,
-  vPublicIf  ==> net ("kipubr-"++vName) "virtio" 0 mac,
-  vPrivateIf ==> net ("kiprivbr-"++vName) "virtio" 0 mac
+  vPublicIf  ==> net ("kpu-"++vName) "virtio" 0 mac,
+  vPrivateIf ==> net ("kpr-"++vName) "virtio" 0 mac
    -- TODO: in theory MAC addresses only have to be unique per segment, since
    -- the private net is a seperate bridge we should be fine but who knows TODO:
 

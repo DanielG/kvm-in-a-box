@@ -201,7 +201,7 @@ resources cfg@Config {..} Options {..} kibGrp hosts vms = do
                 , pubIfR notTesting
                 , privIfR notTesting
                 , dnsmasqR
-                , iptablesResource cfg (mkIface "kipubr") (Map.elems vms) (Map.fromList hosts)
+                , iptablesResource cfg (mkIface "kpu") (Map.elems vms) (Map.fromList hosts)
                 ] ++ mkSystemdR hosts
                ]
  where
@@ -220,13 +220,13 @@ resources cfg@Config {..} Options {..} kibGrp hosts vms = do
 
    pubIfR _ | null pubVms = ManyResources []
    pubIfR amRoot =
-    interfaceResource (mkIface "kipubr") (Just caddr) caddr6 pubVms amRoot
+    interfaceResource (mkIface "kpu") (Just caddr) caddr6 pubVms amRoot
 
    privIfR _ | null privVms = ManyResources []
    privIfR amRoot =
     -- priv interface doesn't get an IPv4 address since that would be silly
     -- complicated
-    interfaceResource (mkIface "kiprivbr") Nothing cpriv6 privVms amRoot
+    interfaceResource (mkIface "kpr") Nothing cpriv6 privVms amRoot
 
    passwdR grp =
        passwdResource (Map.keys vms) grp
@@ -238,7 +238,7 @@ resources cfg@Config {..} Options {..} kibGrp hosts vms = do
                   $ Map.intersectionWith (,) vms (Map.fromList hosts)
 
    dnsmasqR = ManyResources $
-       [ vmDnsDhcpResource (map mkIface ["kipubr"]) cfg -- "kiprivbr" disabled until off-link option becomes available in debian version or we do a backport or something
+       [ vmDnsDhcpResource (map mkIface ["kpu"]) cfg -- "kiprivbr" disabled until off-link option becomes available in debian version or we do a backport or something
        , vmHostLeaseResource cAddress vmns
        ]
 

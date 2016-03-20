@@ -1,0 +1,14 @@
+auto kpu
+iface kpu inet static
+  bridge_ports   kpu-vm
+  bridge_stp     off
+  bridge_maxwait 0
+  bridge_fd      0
+  address        10.0.0.1
+  netmask        16
+  pre-up ip tuntap add dev kpu-vm mode tap user kib-vm
+  pre-up ip link set kpu-vm up
+  up ip -6 addr add 2001:db8::2/64 dev kpu
+  down ip -6 addr del 2001:db8::2/64 dev kpu
+  post-down ip link set kpu-vm down
+  post-down ip tuntap del dev kpu-vm mode tap

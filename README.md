@@ -79,8 +79,8 @@ The `upstream-interface` will be added to the public interface's bridge, routing
 and firewall rules will be setup to let traffic to and from the public interface
 pass.
 
-Per convention the public/private bridge interfaces are called `kipubr` and
-`kiprivbr` respectively.
+Per convention the public/private bridge interfaces are called `kpu` and
+`kpr` respectively.
 
 
     cat > /etc/kvm-in-a-box.cfg <<EOF
