@@ -75,13 +75,15 @@ create vmn vmf0 cfg opts s@State { sVms=sVms0 }
         error $ "VM '"++vmn++"' already exists."
 
 remove :: VmName -> Config -> Options -> State -> IO State
-remove vmn cfg opts s@State { sVms=sVms0, sNet }
+remove vmn cfg opts s@State { sVms=sVms0, sNet=sNet0 }
     | vmn `Map.member` sVms0 = do
         let Just vm = Map.lookup vmn sVms0
             sVms1 = Map.delete vmn sVms0
 
-        removeResources cfg opts sVms0 sNet vmn
-        return $ s { sVms = sVms1 }
+        removeResources cfg opts sVms0 sNet0 vmn
+        sNet1 <- ensureResources cfg opts sVms1
+
+        return $ s { sVms = sVms1, sNet = sNet1 }
 
     | otherwise =
         error $ "VM '"++vmn++"' does not exist."
@@ -218,11 +220,9 @@ resources cfg@Config {..} Options {..} kibGrp hosts vms = do
    cpriv6 = cPrivate6
    -- cgrp6 = cGroup6
 
-   pubIfR _ | null pubVms = ManyResources []
    pubIfR amRoot =
     interfaceResource (mkIface "kpu") (Just caddr) caddr6 pubVms amRoot
 
-   privIfR _ | null privVms = ManyResources []
    privIfR amRoot =
     -- priv interface doesn't get an IPv4 address since that would be silly
     -- complicated
@@ -285,7 +285,9 @@ removeResources :: Config -> Options -> Map VmName Vm -> Map VmName (MAC, IPv4) 
 removeResources cfg opts@Options {..} vms hosts vmn = do
     kibGrp <- getGroupEntryForName "kib"
     rs <- resources cfg opts kibGrp (Map.toList hosts) vms
-    removeResource oRoot (Just $ OwnerVm vmn) rs
+
+    let actions = removeResource oRoot (Just $ OwnerVm vmn) rs
+    mapM_ (handle (\(ex :: SomeException) -> hPutStrLn stderr $ show ex)) actions
 
 setup :: Config -> Options -> State -> IO State
 setup cfg opts s = do

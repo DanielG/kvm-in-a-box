@@ -1,2 +1,2 @@
-kvm::5000:kib-vm
-kib::5001:kib-vm
+kvm:x:100:kib-vm
+kib:x:101:kib-vm

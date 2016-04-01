@@ -6,6 +6,7 @@ import Data.List
 import Data.List.Split
 import Data.Either
 import Data.Word
+import Data.Char
 import Data.Maybe
 import Data.Function
 
@@ -13,7 +14,6 @@ import System.FilePath
 import System.Posix.Types
 import System.Posix.User hiding (GroupEntry(..))
 import qualified System.Posix.User as PX
-
 
 import Types
 import Resource
@@ -116,10 +116,22 @@ checkId uid =
       then error "Out of U/GIDs!"
       else uid
 
-nextId uids = checkId $
+nextKibId = nextId
+nextId uids = checkSystemId uids $
     (+1) $ foldr max 4999
          $ filter (< 65534)
          $ filter (>=5000) uids
+
+checkSystemId :: (Num a, Ord a) => [a] -> a -> a
+checkSystemId uids uid =
+    if uid >= 65533 || uid `elem` uids
+      then error "Out of system U/GIDs!"
+      else uid
+
+nextSystemId uids = checkId $
+    (+1) $ foldr max 99
+         $ filter (< 1000)
+         $ filter (>=100) uids
 
 makePasswdDb vmns kibGrp db = let
     nextUid :: UserID
@@ -183,15 +195,30 @@ makeShadowDb vmns db = let
 
 makeGroupDb :: [String] -> [GroupEntry] -> [GroupEntry]
 makeGroupDb vmns db = let
-    gid0 = nextId $ map geGID db
-    groups0 = [ \gid -> GroupEntry "kvm" "" gid []
-              , \gid -> GroupEntry "kib" "" gid []
-              ]
-    groups1 = map (uncurry ($)) $ groups0 `zip` (map checkId $ iterate (+1) gid0)
+    gid0 = nextSystemId $ map geGID db
+    gid1 = nextSystemId $ map geGID (db ++ [kvmGrp])
+
+    defKvmGrp = GroupEntry "kvm" "x" gid0 []
+    kvmGrp = fromMaybe defKvmGrp $ clearMembers <$> find ((=="kvm") . geName) db
+
+    defKibGrp = GroupEntry "kib" "x" gid1 []
+    kibGrp = fromMaybe defKibGrp $ clearMembers <$> find ((=="kib") . geName) db
+
+
+    clearMembers = modifyGeUsers $ filter (not . ("kib-" `isPrefixOf`))
     addMembers = modifyGeUsers $ \users -> nub $ users ++ map ("kib-"++) vmns
-    groups2 = modifyGeElems addMembers ["kvm", "kib"] groups1
+
   in
-    nubBy ((==) `on` geName) $ db ++ groups2
+    reverse $ nubBy ((==) `on` geName) $ reverse (map addMembers [kvmGrp, kibGrp]) ++ reverse db
+
+  --   gid0 = nextId $ map geGID db
+  --   groups0 = [ \gid -> GroupEntry "kvm" "" gid []
+  --             , \gid -> GroupEntry "kib" "" gid []
+  --             ]
+  --   groups1 = map (uncurry ($)) $ groups0 `zip` (map checkId $ iterate (+1) gid0)
+  --   groups2 = modifyGeElems addMembers ["kvm", "kib"] groups1
+  -- in
+  --   reverse $ nubBy ((==) `on` geName) $ reverse groups2 ++ reverse db
 
 modifyGeUsers f ge = ge { geUserList = f (geUserList ge) }
 
@@ -224,7 +251,7 @@ ungrent (GroupEntry n p i us) =
     intercalate ":" [n, p, showGid i, intercalate "," us]
 
 parse :: (String -> a) -> String -> [a]
-parse pl str = map pl $ lines str
+parse pl str = map pl $ filter (not . all isSpace) $ lines str
 
 parsePwd = parse parsePwdLine
 parseShd = parse parseShdLine

@@ -51,9 +51,11 @@ type FilePerms = (UidGid, Maybe FilePermMask)
 
 defaultFilePerms = ((Nothing, Nothing), Nothing)
 
+data ResourceInfo = ResourceInfo FilePath [ResourceOwner]
+
 class ResourceC r where
     ensureResource :: FilePath -> r -> IO ()
-    removeResource :: FilePath -> Maybe ResourceOwner -> r -> IO ()
+    removeResource :: FilePath -> Maybe ResourceOwner -> r -> [IO ()]
     resourceOwners :: FilePath -> r -> IO [[ResourceOwner]]
     resourcePaths  :: r -> [FilePath]
 
@@ -116,10 +118,14 @@ instance ResourceC SimpleFileResource where
     ensureResource root $
       FileResource path perms norm (return . (,) owner) head (const [(owner, content)])
 
-  removeResource root mo SimpleFileResource {sfrPath, sfrOwner} =
+  removeResource root mo SimpleFileResource {sfrPath, sfrOwner} = return $ do
     case mo of
-      Nothing -> removeFile (rootRel root sfrPath)
-      Just owner -> when (owner == sfrOwner) $ removeFile (rootRel root sfrPath)
+      Nothing -> do
+              klog $ "removing resource '"++sfrPath++"'."
+              removeFile (rootRel root sfrPath)
+      Just owner -> when (owner == sfrOwner) $ do
+              klog $ "removing resource '"++sfrPath++"'."
+              removeFile (rootRel root sfrPath)
 
   resourceOwners r (SimpleFileResource path perms owner norm content) = do
     resourceOwners r $
@@ -142,18 +148,24 @@ instance FromOwned a => ResourceC (FileResource a) where
         Just (force -> f) | norm f /= norm (unparse $ disown $ cf ctx $ Just $ parse f) -> do
                 klog $ "resource '"++path++"' changed, rewriting."
                 writeFile'' path (Just perms) $ unparse $ disown $ cf ctx $ Just (parse f)
-        _ -> return ()
+        _ -> klog $ "resource '"++path++"'"
 
-  removeResource root (Just owner) (MultiFileResource {rUnparse = (rUnparse :: a -> String), ..}) = do
+  removeResource root (Just owner) (MultiFileResource {rUnparse = (rUnparse :: a -> String), ..}) = return $ do
       let ps = map fst rPaths
       forM_ ps $ \p -> do
+        klog $ "removing resource '"++p++"' ("++show owner++")."
         f <- rParse <$> readFile (rootRel root p)
-        writeFile' (rootRel root p) $ rUnparse $ disown $ filterOwner (Proxy :: Proxy a) (==owner) f
-  removeResource root (Just owner) (FileResource {..}) = do
+        writeFile' (rootRel root p) $ rUnparse $ disown $ filterOwner (Proxy :: Proxy a) (/=owner) f
+
+  removeResource root (Just owner) (FileResource {..}) = return $ do
+      klog $ "removing resource '"++rPath++"' ("++show owner++") [FileResource]."
       f <- rParse <$> readFile (rootRel root rPath)
-      writeFile' (rootRel root rPath) $ rUnparse $ disown $ filterOwner (Proxy :: Proxy a) (==owner) f
-  removeResource root Nothing res =
-      forM_ paths $ \p -> removeFile (rootRel root p)
+      writeFile' (rootRel root rPath) $ rUnparse $ disown $ filterOwner (Proxy :: Proxy a) (/=owner) f
+
+  removeResource root Nothing res = return $
+      forM_ paths $ \p -> do
+        klog $ "removing resource '"++p++"'."
+        removeFile (rootRel root p)
     where
       paths | MultiFileResource {..} <- res = map fst rPaths
             | FileResource {..} <- res = [rPath]
@@ -205,13 +217,16 @@ instance ResourceC FileMetaResource where
              createSymbolicLink fmrPath fmrTarget
 
   removeResource root mo (DirectoryResource (rootRel root -> path) _ owner)
-      | mo == Just owner = removeDirectoryRecursive path
-      | otherwise = return ()
+      | mo == Just owner = return $ do
+                             klog $ "removing resource '"++path++"' ("++show owner++")."
+                             removeDirectoryRecursive path
+      | otherwise = [return ()]
 
   removeResource root mo SymlinkResource {..}
-      | mo == Just fmrOwner = removeLink fmrPath
-      | otherwise = return ()
-
+      | mo == Just fmrOwner = return $ do
+                                klog $ "removing resource '"++fmrPath++"'."
+                                removeLink fmrPath
+      | otherwise = [return ()]
 
   resourceOwners r DirectoryResource {fmrOwner} = return [[fmrOwner]]
   resourceOwners r SymlinkResource {fmrOwner} = return [[fmrOwner]]
@@ -226,25 +241,29 @@ instance ResourceC (IOResource a) where
     klog $ rUpdateMsg a
     rUpdate a
 
-  removeResource _ _ _ = return ()
+  removeResource _ _ _ = [return ()]
 
-  resourceOwners _ _ = return []
+  resourceOwners _ _ = return [[]]
   resourcePaths (IOResource {}) = ["<IO resource>"]
 
 instance ResourceC ManyResources where
   ensureResource root (ManyResources rs) =
       mapM_ (ensureResource root) rs
-  removeResource root mo (ManyResources rs) =
-      mapM_ (removeResource root mo) rs
+  removeResource root mo (ManyResources rs) = do
+      concatMap (removeResource root mo) rs
   resourceOwners r (ManyResources rs) =
       concat <$> mapM (resourceOwners r) rs
   resourcePaths (ManyResources rs) = concatMap resourcePaths rs
 
 instance ResourceC SomeResource where
-  ensureResource root (SomeResource r) = ensureResource root r
-  removeResource root mo (SomeResource r) = removeResource root mo r
-  resourceOwners root (SomeResource r) = resourceOwners root r
-  resourcePaths (SomeResource r) = resourcePaths r
+  ensureResource root (SomeResource r) =
+      ensureResource root r
+  removeResource root mo (SomeResource r) = do
+      removeResource root mo r
+  resourceOwners root (SomeResource r) =
+      resourceOwners root r
+  resourcePaths (SomeResource r) =
+      resourcePaths r
 
 withMultiFileResource :: FromOwned a
                       => FilePath

@@ -21,6 +21,14 @@ import Files
 import IP
 
 interfaceResource :: Interface -> Maybe (Address IPv4) -> Address IPv6 -> [VmName] -> Bool -> ManyResources
+interfaceResource br@(unIface -> brn) maddr addr6 [] amRoot =
+    ManyResources $ return $ SomeResource $ SimpleFileResource {
+      sfrPath = etcdir </> "network/interfaces.d/"++brn,
+      sfrPerms = ((Nothing, Nothing), Just "644"),
+      sfrNormalize = id,
+      sfrContent = "",
+      sfrOwner = OwnerKib
+    }
 interfaceResource br@(unIface -> brn) maddr addr6 vms amRoot = ManyResources $ [
     SomeResource $ SimpleFileResource {
       sfrPath = etcdir </> "network/interfaces.d/"++brn,
