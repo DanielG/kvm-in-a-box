@@ -9,6 +9,7 @@ import Data.Word
 import Data.Char
 import Data.Maybe
 import Data.Function
+import Data.Functor
 
 import System.FilePath
 import System.Posix.Types
