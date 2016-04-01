@@ -348,6 +348,9 @@ commands = subparser $ mconcat
                                <*> subvolOpt
       ]
 
+  , command "lvs" $ withInfo "logical volume information" $
+      stateless $ pure $ const $ exitWith =<< rawSystem "lvs" []
+
   -- See "--ssh-key" option
   -- , command "authorize" $ withInfo "Add an authorized SSH public key to a VM" $
   --     authorize <$> strArgument (metavar "NAME") <*> strArgument (metavar "KEY")
