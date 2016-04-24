@@ -23,7 +23,7 @@ intOption = option $ eitherReader $ (\str' -> readEither str')
 
 readIntegralSafe :: forall a. (Integral a, Read a, Bounded a) => String -> Either String a
 readIntegralSafe str = let
-    i = read str :: Integer
+    i = readNote "readIntegralSafe" str :: Integer
     min = toInteger (minBound :: a)
     max = toInteger (maxBound :: a)
   in if i < min || i > max

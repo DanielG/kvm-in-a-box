@@ -440,9 +440,9 @@ parsePolicy = do
   mpolicy <- (Just <$> many1 alphaNum) <|> (Nothing <$ char '-')
   nnspaces
   char '['
-  rx <- read <$> many1 digit
+  rx <- readNote "parsePolicy: digit1" <$> many1 digit
   char ':'
-  tx <- read <$> many1 digit
+  tx <- readNote "parsePolicy: digit2" <$> many1 digit
   char ']'
   skipMany nonNewline
   newline

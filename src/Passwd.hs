@@ -268,6 +268,6 @@ parseShdLine li = let [l, p, c, mi, ma, w, i, e, r] = splitOn ":" li
 
 parseGrpLine :: String -> GroupEntry
 parseGrpLine li = let [n, p, i, splitOn "," -> us] = splitOn ":" li
-                  in GroupEntry n p (read i) us
+                  in GroupEntry n p (readNote "CGid" i) us
 
 notExists l = null . filter ((==l) . peLoginName)
