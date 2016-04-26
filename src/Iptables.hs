@@ -29,6 +29,7 @@ import Text.Parsec.Char
 import Text.Parsec.Prim hiding (parse)
 import Text.Parsec.Combinator
 import System.FilePath
+import Safe
 
 import Debug.Trace
 

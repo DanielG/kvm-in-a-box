@@ -11,6 +11,7 @@ import qualified Data.Set as Set
 
 import Types
 import Read
+import Safe
 
 data Options = Options { oRoot :: FilePath, oQuiet :: Bool } deriving Show
 
