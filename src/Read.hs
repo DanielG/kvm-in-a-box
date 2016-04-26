@@ -88,12 +88,12 @@ import Text.ParserCombinators.ReadPrec (lift)
 
 -- -----------------------------------------------------------------------------
 
-readEither :: Read a => String -> Either String a
-readEither s =
+readEitherNote :: Read a => String -> String -> Either String a
+readEitherNote note s =
   case [ x | (x,"") <- readPrec_to_S read' minPrec s ] of
     [x] -> Right x
-    []  -> Left "Prelude.read: no parse"
-    _   -> Left "Prelude.read: ambiguous parse"
+    []  -> Left $ "Read.readEitherNote: no parse on \""++ s ++"\", " ++ note
+    _   -> Left $ "Read.readEitherNote: ambiguous parse on \""++ s ++"\", " ++ note
  where
   read' =
     do x <- readPrec
@@ -101,6 +101,6 @@ readEither s =
        return x
 
 readMaybe :: Read a => String -> Maybe a
-readMaybe s = case readEither s of
+readMaybe s = case readEitherNote "" s of
                 Left _  -> Nothing
                 Right a -> Just a

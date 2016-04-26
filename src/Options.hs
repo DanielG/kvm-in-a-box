@@ -20,7 +20,7 @@ exceptP (Left s)  = readerError s
 exceptP (Right a) = return a
 
 intOption :: Mod OptionFields Int -> Parser Int
-intOption = option $ eitherReader $ (\str' -> readEither str')
+intOption = option $ eitherReader $ (\str' -> readEitherNote "intOption" str')
 
 readIntegralSafe :: forall a. (Integral a, Read a, Bounded a) => String -> Either String a
 readIntegralSafe str = let

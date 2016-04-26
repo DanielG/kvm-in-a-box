@@ -9,6 +9,7 @@ import Data.Word
 import Data.List
 import Data.List.Split
 import Data.Function
+import Safe
 
 import BitUtils
 
@@ -36,6 +37,6 @@ showMAC (MAC ws) = intercalate ":" $ map (fill . flip showHex "") ws
    fill s = s
 
 readMAC :: String -> MAC
-readMAC str = MAC $ map read $ splitOn ":" str
+readMAC str = MAC $ map (readNote "readMAC") $ splitOn ":" str
 
 nullMAC = readMAC "02:00:00:00:00:00"
