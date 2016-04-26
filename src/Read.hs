@@ -1,8 +1,10 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Read where
 
 import Text.Read (readPrec_to_S, readPrec, minPrec)
 import qualified Text.ParserCombinators.ReadP as P
 import Text.ParserCombinators.ReadPrec (lift)
+import Numeric
 
 -- This library (libraries/base) is derived from code from several
 -- sources:
@@ -104,3 +106,7 @@ readMaybe :: Read a => String -> Maybe a
 readMaybe s = case readEitherNote "" s of
                 Left _  -> Nothing
                 Right a -> Just a
+
+newtype Hex a = Hex { unHex :: a } deriving (Eq, Ord, Num)
+instance (Eq a, Num a) => Read (Hex a) where
+    readsPrec _ = readHex

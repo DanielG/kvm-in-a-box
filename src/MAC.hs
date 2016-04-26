@@ -12,6 +12,7 @@ import Data.Function
 import Safe
 
 import BitUtils
+import Read
 
 newtype MAC = MAC [Word8]
     deriving (Eq, Ord, Generic)
@@ -37,6 +38,6 @@ showMAC (MAC ws) = intercalate ":" $ map (fill . flip showHex "") ws
    fill s = s
 
 readMAC :: String -> MAC
-readMAC str = MAC $ map (readNote "readMAC") $ splitOn ":" str
+readMAC str = MAC $ map (unHex . readNote "readMAC") $ splitOn ":" str
 
 nullMAC = readMAC "02:00:00:00:00:00"
