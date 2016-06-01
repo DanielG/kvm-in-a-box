@@ -13,15 +13,19 @@ lvmOwnerResources vms = SomeResource $ FileResource {
     rNormalize = unlines . sort . lines,
     rParse = map own . parse,
     rUnparse = unparse,
-    rContentFunc = const $ map (own . rs) vms
+    rContentFunc = const $ map (own . concat . rs) vms
   }
 
  where
-   rs Vm { vName=vmn, vSysCfg=VmSysCfg {vVg=vg} } =
+   rs Vm { vName=vmn, vSysCfg=VmSysCfg {vVg=vg, vAddDisks=addDisks} } =
        [ ("ENV{DM_VG_NAME}==", qt vg)
        , ("ENV{DM_LV_NAME}==", qt vmn)
        , ("OWNER=", qt $ "kib-" ++ vmn)
-       ]
+       ] : flip map addDisks (\disk ->
+          [ ("ENV{DM_VG_NAME}==", qt vg)
+          , ("ENV{DM_LV_NAME}==", qt $ vmn ++ "-" ++ disk)
+          , ("OWNER=", qt $ "kib-" ++ vmn)
+          ])
 
 {-
 
