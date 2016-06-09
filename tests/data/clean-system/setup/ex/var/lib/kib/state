@@ -1,2 +1,2 @@
 kvm-in-a-box state format: v4
-{"vms":{},"net":{}}
+{"net":{},"vms":{}}
