@@ -2,9 +2,11 @@ module Udev where
 
 import Types
 import Resource
+import Control.Applicative
 import Data.List
 import Data.List.Split
 import Data.Maybe
+
 
 lvmOwnerResources :: [Vm] -> SomeResource
 lvmOwnerResources vms = SomeResource $ FileResource {
@@ -13,44 +15,36 @@ lvmOwnerResources vms = SomeResource $ FileResource {
     rNormalize = unlines . sort . lines,
     rParse = map own . parse,
     rUnparse = unparse,
-    rContentFunc = const $ map (own . concat . rs) vms
+    rContentFunc = const $ map own $ concatMap rs vms
   }
 
  where
    rs Vm { vName=vmn, vSysCfg=VmSysCfg {vVg=vg, vAddDisks=addDisks} } =
+       rule vg vmn Nothing : map (rule vg vmn) (map Just addDisks)
+
+   rule vg vmn mdisk =
        [ ("ENV{DM_VG_NAME}==", qt vg)
-       , ("ENV{DM_LV_NAME}==", qt vmn)
+       , ("ENV{DM_LV_NAME}==", qt $ vmn ++ fromMaybe "" (("-"++) <$> mdisk))
        , ("OWNER=", qt $ "kib-" ++ vmn)
-       ] : flip map addDisks (\disk ->
-          [ ("ENV{DM_VG_NAME}==", qt vg)
-          , ("ENV{DM_LV_NAME}==", qt $ vmn ++ "-" ++ disk)
-          , ("OWNER=", qt $ "kib-" ++ vmn)
-          ])
-
-{-
-
-  | forall a. FileResource {
-      rPath        :: FilePath,
-      rNormalize   :: String -> String,
-      rParse       :: String -> [Owned a],
-      rUnparse     :: [a] -> String,
-      rContentFunc :: [Owned a] -> [Owned a]
-    }
-
--}
-
+       ]
 
 splitKV = split (condense $ endsWith "=")
 
 qt str = "\"" ++ str ++ "\""
 
-own :: [(a, String)] -> (ResourceOwner, [(a, String)])
-own x@(map snd -> [vg, lv, 'k':'i':'b':'-':vmn]) = (OwnerVm vmn, x)
+own :: [(String, String)] -> (ResourceOwner, [(String, String)])
+own x
+    | Just vg <- lookup "ENV{DM_VG_NAME}" x
+    , Just lv <- lookup "ENV{DM_LV_NAME}" x
+    , Just owner <- lookup "OWNER" x
+    , "kib":vmn:_ <- splitOn "-" owner
+    = (OwnerVm vmn, x)
+
+-- @(map snd -> [vg, lv, 'k':'i':'b':'-':vmn]) = (OwnerVm vmn, x)
 own x = (OwnerSystem, x)
 
 parse :: String -> [[(String, String)]]
 parse = map (map var . words) . lines
-
 
 unparse :: [[(String, String)]] -> String
 unparse = unlines . map (unwords . map unvar)
