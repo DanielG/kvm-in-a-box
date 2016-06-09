@@ -1,0 +1,14 @@
+[Unit]
+Description=Kvm-in-a-box VM: vm
+After=kvm-in-a-box.target
+
+[Service]
+ExecStart=/usr/sbin/kib-supervise '/usr/bin/qemu-system-x86_64' '-sandbox' 'on' '-cpu' 'host' '-machine' 'pc,accel=kvm' '-nographic' '-vga' 'none' '-option-rom' '/usr/share/qemu/sgabios.bin' '-monitor' 'unix:%t/kib-vm/monitor.unix,server,nowait' '-serial' 'unix:%t/kib-vm/ttyS0.unix,server,nowait' '-qmp' 'stdio' '-smp' '1' '-m' '512' '-drive' 'file=/dev/vg0/vm,id=hdd0,format=raw' '-device' 'virtio-scsi-pci' '-drive' 'file=/dev/vg0/vm-data,id=hdd1,format=raw' '-device' 'virtio-scsi-pci' '-net' 'none'
+KillMode=mixed
+Restart=on-failure
+RuntimeDirectory=kib-vm
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

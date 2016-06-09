@@ -1,0 +1,2 @@
+ENV{DM_VG_NAME}=="vg0" ENV{DM_LV_NAME}=="vm" OWNER="kib-vm"
+ENV{DM_VG_NAME}=="vg0" ENV{DM_LV_NAME}=="vm-data" OWNER="kib-vm"
