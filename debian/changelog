@@ -1,3 +1,9 @@
+kvm-in-a-box (11) UNRELEASED; urgency=medium
+
+  * Make QEMU drive device configurable
+
+ -- Daniel Gröber <dxld@darkboxed.org>  Sun, 02 Apr 2017 22:42:13 +0200
+
 kvm-in-a-box (10) jessie; urgency=medium
 
   * New upstream release

@@ -1,2 +1,5 @@
-kvm-in-a-box state format: v4
-{"net":{},"vms":{}}
+kvm-in-a-box state format: v4.1
+{
+  "vms": {},
+  "net": {}
+}

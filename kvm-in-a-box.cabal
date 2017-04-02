@@ -25,7 +25,7 @@ executable kib
                       MultiParamTypeClasses, FunctionalDependencies,
                       FlexibleInstances, TupleSections
   other-extensions:   TemplateHaskell
-  build-depends:       base >=4.6 && <4.9
+  build-depends:       base >=4.6 && <4.10
                      , directory
                      , process >= 1.1.0.0
                      , optparse-applicative < 0.13
@@ -74,7 +74,7 @@ executable kib-supervise
   other-modules:
   default-extensions: RecordWildCards, ViewPatterns, LambdaCase, MultiWayIf,
                       NamedFieldPuns, NoMonomorphismRestriction
-  build-depends:       base >=4.6 && <4.9
+  build-depends:       base >=4.6 && <4.10
                      , directory
                      , process >= 1.1.0.0
                      , unix

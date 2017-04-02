@@ -48,7 +48,7 @@ writeState root s = do
     let f = rootRel root stateFile
     createDirectoryIfMissing True (takeDirectory f)
     writeFile''LBS f (Just ((Nothing, Nothing), Just "644")) $ LBS.concat
-      [ "kvm-in-a-box state format: v4\n", encode s, "\n" ]
+      [ "kvm-in-a-box state format: v4.1\n", encode s, "\n" ]
 
 modifyState root f = do
   s <- readState root

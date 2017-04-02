@@ -17,15 +17,7 @@ kvm-in-a-box state format: v4.1
         "public_if": true,
         "private_if": false,
         "group_ifs": [],
-        "forwarded_ports4": [
-          [
-            "tcp",
-            [
-              443,
-              443
-            ]
-          ]
-        ],
+        "forwarded_ports4": [],
         "open_ports6": []
       },
       "q_cfg": {

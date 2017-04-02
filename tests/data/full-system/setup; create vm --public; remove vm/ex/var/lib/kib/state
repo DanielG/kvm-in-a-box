@@ -1,2 +1,10 @@
-kvm-in-a-box state format: v4
-{"net":{"vm":["02:00:00:00:00:01","10.0.0.2"]},"vms":{}}
+kvm-in-a-box state format: v4.1
+{
+  "vms": {},
+  "net": {
+    "vm": [
+      "02:00:00:00:00:01",
+      "10.0.0.2"
+    ]
+  }
+}

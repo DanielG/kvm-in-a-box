@@ -68,6 +68,14 @@ main = do
 
     mapM ((\cmd -> print cmd >> system cmd) . runTestCmd) cmds
 
+    let state_path = i </> "var/lib/kib/state"
+    _ <- system $ "head -n1 " ++ shellEscape state_path
+                              ++ " > " ++ shellEscape (state_path <.> "tmp")
+
+    _ <- system $ "tail -n +2 "++ shellEscape state_path ++ " | jq '.'"
+                     ++ " >> "++ shellEscape (state_path <.> "tmp")
+    renameFile (state_path <.> "tmp") state_path
+
 --    rawSystem "find" [i]
 
     (rv, diff, err)  <- readProcessWithExitCode "git" ["diff", "--no-index", "--color", "--word-diff=color", "--", e, i] ""

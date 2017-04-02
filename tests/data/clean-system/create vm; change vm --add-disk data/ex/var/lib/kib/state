@@ -1,2 +1,37 @@
-kvm-in-a-box state format: v4
-{"net":{"vm":["02:00:00:00:00:01","10.0.0.2"]},"vms":{"vm":{"sys_cfg":{"add_disks":["data"],"vg":"vg0","authorized_keys":[]},"q_cfg":{"mem":512,"cpus":1},"name":"vm","cfg":{"arch":"x86_64"},"net_cfg":{"group_ifs":[],"private_if":false,"forwarded_ports4":[],"user_if":false,"open_ports6":[],"public_if":false}}}}
+kvm-in-a-box state format: v4.1
+{
+  "vms": {
+    "vm": {
+      "name": "vm",
+      "cfg": {
+        "arch": "x86_64",
+        "drive_device": "scsi-hd"
+      },
+      "sys_cfg": {
+        "vg": "vg0",
+        "add_disks": [
+          "data"
+        ],
+        "authorized_keys": []
+      },
+      "net_cfg": {
+        "user_if": false,
+        "public_if": false,
+        "private_if": false,
+        "group_ifs": [],
+        "forwarded_ports4": [],
+        "open_ports6": []
+      },
+      "q_cfg": {
+        "cpus": 1,
+        "mem": 512
+      }
+    }
+  },
+  "net": {
+    "vm": [
+      "02:00:00:00:00:01",
+      "10.0.0.2"
+    ]
+  }
+}

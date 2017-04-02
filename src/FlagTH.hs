@@ -1,4 +1,4 @@
-{-# LANGUAGE ViewPatterns, TemplateHaskell #-}
+{-# LANGUAGE CPP, ViewPatterns, TemplateHaskell #-}
 module FlagTH (flagTH) where
 
 import Control.Monad
@@ -45,9 +45,15 @@ flagTH qds = qds >>= \ds ->
   return $ concat $ map flagTH' ds
 
 flagTH' :: Dec -> [Dec]
+#if MIN_VERSION_template_haskell(2,11,1)
+flagTH' (DataD ctx name@(Name (OccName n) _) tyvars mkind cons dervs ) = [
+    DataD ctx name tyvars mkind cons dervs,
+    DataD ctx (appendName "Flags" name) tyvars mkind (map flagCon cons) dervs,
+#else
 flagTH' (DataD ctx name@(Name (OccName n) _) tyvars cons dervs ) = [
     DataD ctx name tyvars cons dervs,
     DataD ctx (appendName "Flags" name) tyvars (map flagCon cons) dervs,
+#endif
     FunD (mkName $ "combine" ++ n ++ "Flags") (map combineClause cons),
     FunD (mkName $ "un" ++ n ++ "Flags") (map unClause cons),
     FunD (mkName $ "mk" ++ n ++ "Flags") (map mkClause cons)

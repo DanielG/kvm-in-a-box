@@ -73,6 +73,10 @@ vmCfgP = VmCfgFlags
                long "arch"
             <<>> metavar "ARCH"
             <<>> help "Which CPU architecture the VM should use"
+     <*> optional $$ strOption $$
+               long "drive-device"
+            <<>> metavar "DEVICE"
+            <<>> help "Which QEMU -drive -device to use (see 'qemu -device help')"
 
 vmSysCfgP :: Parser VmSysCfgFlags
 vmSysCfgP = VmSysCfgFlags

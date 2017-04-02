@@ -36,7 +36,10 @@ qemu rundir mac Qemu { qVm = Vm { vName, vCfg = VmCfg {..}, vSysCfg = VmSysCfg {
       ],
   smp vCpus,
   mem vMem,
-  concat $ map (\(i, n) -> disk i ("/dev" </> vVg </> n) Nothing) $ [0..] `zip` (vName : map ((vName ++ "-")++) vAddDisks),
+  case vDriveDevice of
+    "scsi-hd" -> ["-device", "virtio-scsi-pci"]
+    _ -> [],
+  concat $ map (\(i, n) -> disk i ("/dev" </> vVg </> n) vDriveDevice Nothing) $ [0..] `zip` (vName : map ((vName ++ "-")++) vAddDisks),
   ["-net", "none"],
   vUserIf    ==> userNet "virtio" 2 qUserIfOpts,
   vPublicIf  ==> net ("kpu-"++vName) "virtio" 0 mac,
@@ -58,12 +61,13 @@ mem b = [ "-m", show b]
 
 arch a = "/usr/bin/qemu-system-" ++ a
 
-disk i file mfmt =
+disk i file device mfmt =
     [ "-drive",  opts [ ("file", file)
                       , ("id", "hdd" ++ show i)
                       , ("format", fromMaybe "raw" mfmt)
+                      , ("if", "none")
                       ]
-    , "-device", "virtio-scsi-pci"
+    , "-device", device ++ "," ++ opts [ ("drive", "hdd" ++ show i) ]
     ]
 
 net ifname model vlan mac =

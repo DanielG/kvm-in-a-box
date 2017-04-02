@@ -65,11 +65,12 @@ unIface (Iface ifn) = ifn
 flagTH [d|
  -- | virtual machine type configuration
  data VmCfg = VmCfg {
-       vArch      :: String
+       vArch        :: String,
+       vDriveDevice :: String
      } deriving (Eq, Ord, Show, Read, Generic)
  |]
 
-defVmCfg = VmCfg "x86_64"
+defVmCfg = VmCfg "x86_64" "scsi-hd"
 
 
 flagTH [d|
