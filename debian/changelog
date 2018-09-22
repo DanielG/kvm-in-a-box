@@ -1,9 +1,15 @@
-kvm-in-a-box (12) UNRELEASED; urgency=medium
+kvm-in-a-box (13) jessie; urgency=medium
+
+  * Fix preseed for debian stretch d-i
+
+ -- Daniel Gröber <dxld@darkboxed.org>  Sat, 22 Sep 2018 21:09:10 +0200
+
+kvm-in-a-box (12) jessie; urgency=medium
 
   * Disallow root password-login on newly created VMs. SSH keys are
     now used exclusively.
 
- -- Daniel Gröber <dxld@darkboxed.org>  Sat, 22 Sep 2018 18:19:04 +0200
+ -- Daniel Gröber <dxld@darkboxed.org>  Sat, 22 Sep 2018 21:08:55 +0200
 
 kvm-in-a-box (11) jessie; urgency=medium
 
