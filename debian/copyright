@@ -5,13 +5,13 @@ Source: https://hackage.haskell.org/package/kvm-in-a-box
 
 Files: *
 Copyright: (No copyright field in cabal file)
-License: AGPL (Just (Version {versionBranch = [3], versionTags = []}))
+License: AGPL 3
 
 Files: debian/*
 Copyright: held by the contributors mentioned in debian/changelog
-License: AGPL (Just (Version {versionBranch = [3], versionTags = []}))
+License: AGPL 3
 
-License: AGPL (Just (Version {versionBranch = [3], versionTags = []}))
+License: AGPL 3
                      GNU AFFERO GENERAL PUBLIC LICENSE
                         Version 3, 19 November 2007
  .

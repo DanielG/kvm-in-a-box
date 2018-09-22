@@ -34,6 +34,7 @@ Architecture: any
 Section: misc
 Depends: ${haskell:Depends},
  ${misc:Depends},
+ ${shlibs:Depends},
  bridge-utils,
  iptables-persistent,
  sgabios,
