@@ -482,7 +482,12 @@ installDebian vmn mfile = void $ do
     preseed <-
       case mfile of
         Just file -> do
-          rawSystem "cp" ["--", file, tmp]
+          preseed_cfg <- readFile file
+          authorize_keys_cmd <- constructAuthorizedKeysCmd vmn
+          writeFile (tmp </> takeFileName file) $
+            replaceStr "true ROOT_SSH_KEY_COMMAND_PLACEHOLDER"
+                       authorize_keys_cmd
+                       preseed_cfg
           return $ unwords [ ""
                            , "auto=true"
                            , "priority=critical"
@@ -515,6 +520,15 @@ installDebian vmn mfile = void $ do
 
     hPutStrLn stderr $ unwords $ cmd:args
     rawSystem "kib-supervise" $ cmd:args
+
+  where
+    replaceStr old new = intercalate new . splitOn old
+    constructAuthorizedKeysCmd vmn = do
+      -- TODO: reading this instead of passing the information is a hack
+      auth_keys <- readFile $ "/etc/ssh/authorized_keys/kib-" ++ vmn
+      return $ intercalate "; "
+             $ map (\key -> "echo '"++key++"' >> /root/.ssh/authorized_keys")
+             $ lines auth_keys
 
 main = do
   prog <- getProgName
