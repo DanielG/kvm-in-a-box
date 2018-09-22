@@ -1,7 +1,7 @@
 name:                kvm-in-a-box
 version:             0.1.0.0
 synopsis:            KVM Hypervisor in a box
-description:         "Easy" to use command line too for generating KVM
+description:         "Easy" to use command line tool for generating KVM
                      hypervisor whole system configuration
 license:             AGPL-3
 license-file:        LICENSE
@@ -19,16 +19,45 @@ executable kib
   other-modules:       Iface,
                        Types,
                        Resource
+                       BitUtils
+                       Config
+                       Data.IP
+                       Data.IP.Addr
+                       Data.IP.Mask
+                       Data.IP.Op
+                       Data.IP.Range
+                       Data.SConfig
+                       Dnsmasq
+                       Files
+                       FlagTH
+                       IP
+                       Iptables
+                       JSON
+                       Log
+                       MAC
+                       MapJoin
+                       Options
+                       ParserUtils
+                       Passwd
+                       Qemu
+                       Read
+                       Ssh
+                       Sysctl
+                       Systemd
+                       SystemdDBus
+                       Udev
+                       Utils
+
   default-extensions: RecordWildCards, ViewPatterns, LambdaCase, MultiWayIf,
                       NamedFieldPuns, NoMonomorphismRestriction,
                       FlexibleContexts, DeriveGeneric, ScopedTypeVariables,
                       MultiParamTypeClasses, FunctionalDependencies,
                       FlexibleInstances, TupleSections
   other-extensions:   TemplateHaskell
-  build-depends:       base >=4.6 && <4.10
+  build-depends:       base >=4.6 && <4.12
                      , directory
                      , process >= 1.1.0.0
-                     , optparse-applicative < 0.13
+                     , optparse-applicative
 -- == 0.10.*
 
                      , containers
@@ -74,7 +103,7 @@ executable kib-supervise
   other-modules:
   default-extensions: RecordWildCards, ViewPatterns, LambdaCase, MultiWayIf,
                       NamedFieldPuns, NoMonomorphismRestriction
-  build-depends:       base >=4.6 && <4.10
+  build-depends:       base >=4.6 && <4.12
                      , directory
                      , process >= 1.1.0.0
                      , unix

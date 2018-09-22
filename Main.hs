@@ -132,6 +132,7 @@ lvremove vmn msub s@State {..} =
         let vol = fromMaybe vmn $ ((vmn ++ "-") ++) <$> msub in
         exitWith =<< rawSystem "lvremove" ["/dev" </> vVg </> vol]
 
+lvextend :: VmName -> String -> Maybe String -> State -> IO State
 lvextend vmn size msub s@State {..} =
   case Map.lookup vmn sVms of
     Nothing -> error $ "VM '"++vmn++"' does not exist."
