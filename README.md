@@ -120,9 +120,9 @@ the start/stop management. In KIB all VMs are run under distinct system users
 (not root like some other KVM management tools that shall remain unnamed) so we
 use systemd user instances to let each VMs owner manage it via the SSH console.
 
-Lastly we need to create some storage for the VM, pretty standard stuff:
+Lastly we need to create some storage for the VM:
 
-    root@kvm-box $ lvcreate vg0 -n foo -L 100G
+    admin@kvm-box $ kib lv create foo 100G
 
 
 And that's it from the hypervisor operator's point of view. Now the user who's
@@ -193,7 +193,3 @@ Cmnd_Alias  KIB       =   /usr/sbin/kib
 this to anyone you don't trust. Also don't use the `NOPASSWD` option unless you
 can trust your admins to have good opsec (passphrases on their ssh key and
 whatnot).
-
-WIP: add lvm management wrappers to `kib` so you don't need to do some weird
-glob stuff in sudoers to restrict admins to just the VG/LVs they should be
-touching.
