@@ -16,6 +16,6 @@ main = doctest
   , "-XScopedTypeVariables"
   , "-idist/build/autogen/"
   , "-optP-include"
-  , "-optPdist/build/autogen/cabal_macros.h"
+  , "-optPdist/build/doctest/autogen/cabal_macros.h"
   , "src"
   ]
