@@ -45,7 +45,8 @@ Depends: ${haskell:Depends},
  socat,
  dnsmasq,
  etckeeper,
- libpam-systemd
+ libpam-systemd,
+ lvm2
 Recommends: ${haskell:Recommends},
 Suggests: ${haskell:Suggests},
 Conflicts: ${haskell:Conflicts},
