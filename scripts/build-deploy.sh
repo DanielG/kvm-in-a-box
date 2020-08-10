@@ -5,7 +5,7 @@ ver=$(dpkg-parsechangelog -S version)
 new_ver=$(( $ver + 1 ))
 
 cat - $changelog > ${changelog}_ <<EOF
-kvm-in-a-box ($new_ver) jessie; urgency=medium
+kvm-in-a-box ($new_ver) buster; urgency=medium
 
   * New upstream release
 

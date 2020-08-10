@@ -1,6 +1,6 @@
 Source: kvm-in-a-box
 Maintainer: Daniel Gröber <dxld@darkboxed.org>
-Priority: extra
+Priority: optional
 Section: haskell
 Build-Depends: debhelper (>= 9),
  haskell-devscripts (>= 0.8),
@@ -24,9 +24,9 @@ Build-Depends: debhelper (>= 9),
  libghc-unordered-containers-dev,
  libghc-uri-dev,
  libghc-doctest-dev,
-Standards-Version: 3.9.6
  libghc-dbus-dev,
  libghc-iproute-dev
+Standards-Version: 4.3.0
 X-Description: Single box KVM virtualization server
  A command line tool for easily managing virtual machines for multiple users.
 
