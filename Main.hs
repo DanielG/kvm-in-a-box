@@ -171,7 +171,7 @@ console vmn State {sVms=sVms0} = do
 
 console' vmn = do
   uid <- userID <$> getUserEntryForName ("kib-" ++ vmn)
-  let socket = (varrundir uid </> "kib-" ++ vmn </> "ttyS0.unix")
+  let socket = (varrundir uid </> "kib-" ++ vmn ++ "-ttyS0.unix")
 
   e <- doesFileExist socket
   when (not e) $ hPutStrLn stderr $ "Waiting for " ++ socket ++ " to appear..."
@@ -181,7 +181,7 @@ console' vmn = do
 
   hPutStrLn stderr "Type RET to get a prompt (serial console)"
   hPutStrLn stderr "Type ^] (ASCII GS) to exit console."
-  pro [ "socat", "STDIO,raw,echo=0,escape=0x1d",  "UNIX-CONNECT:" ++ (varrundir uid </> "kib-" ++ vmn </> "ttyS0.unix") ]
+  pro [ "socat", "STDIO,raw,echo=0,escape=0x1d",  "UNIX-CONNECT:" ++ (varrundir uid </> "kib-" ++ vmn ++ "-ttyS0.unix") ]
 
  where
    waitForFile file = do

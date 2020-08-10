@@ -30,8 +30,8 @@ qemu rundir mac Qemu { qVm = Vm { vName, vCfg = VmCfg {..}, vSysCfg = VmSysCfg {
   case qStdioConsole of
     True -> []
     False -> concat [
-      ["-monitor", "unix:"++ (rundir </> "kib-" ++ vName </> "monitor.unix") ++ ",server,nowait"],
-      ["-serial", "unix:"++ (rundir </> "kib-" ++ vName </> "ttyS0.unix") ++ ",server,nowait"],
+      ["-monitor", "unix:"++ (rundir </> "kib-" ++ vName ++ "-monitor.unix") ++ ",server,nowait"],
+      ["-serial", "unix:"++ (rundir </> "kib-" ++ vName ++ "-ttyS0.unix") ++ ",server,nowait"],
       ["-qmp", "stdio"]
       ],
   smp vCpus,
