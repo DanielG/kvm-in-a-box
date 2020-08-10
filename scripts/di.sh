@@ -23,4 +23,4 @@ fi
 )
 
 qemu-img create -f raw /tmp/di.img 10G || true
-qemu-system-x86_64 -nographic -vga none -cpu host -machine pc,accel=kvm -m 1024 -smp 4 -cdrom "$1" -kernel $tmpdir/install.amd/vmlinuz -initrd $tmpdir/install.amd/initrd.gz -append "console=ttyS0,9600 $PRESEED" -net user,tftp="$tmpdir" -net nic -hda /tmp/di.img
+qemu-system-x86_64 -nographic -vga none -cpu host -machine pc,accel=kvm -m 1024 -smp 4 -cdrom "$1" -kernel $tmpdir/install.amd/vmlinuz -initrd $tmpdir/install.amd/initrd.gz -append "console=ttyS0,9600 $PRESEED" -nic user,tftp="$tmpdir" -hda /tmp/di.img

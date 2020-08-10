@@ -40,7 +40,6 @@ qemu rundir mac Qemu { qVm = Vm { vName, vCfg = VmCfg {..}, vSysCfg = VmSysCfg {
     "scsi-hd" -> ["-device", "virtio-scsi-pci"]
     _ -> [],
   concat $ map (\(i, n) -> disk i ("/dev" </> vVg </> n) vDriveDevice Nothing) $ [0..] `zip` (vName : map ((vName ++ "-")++) vAddDisks),
-  ["-net", "none"],
   vUserIf    ==> userNet "virtio" 2 qUserIfOpts,
   vPublicIf  ==> net ("kpu-"++vName) "virtio" 0 mac,
   vPrivateIf ==> net ("kpr-"++vName) "virtio" 0 mac
@@ -71,22 +70,17 @@ disk i file device mfmt =
     ]
 
 net ifname model vlan mac =
-    [ "-net", "nic," ++ opts [ ("vlan",    show vlan)
-                             , ("macaddr", showMAC mac)
-                             , ("model",   model)
-                             ]
-    , "-net", "tap," ++ opts [ ("vlan",   show vlan)
-                             , ("ifname", ifname)
-                             , ("script", "no")
-                             , ("downscript", "no")
-                             ]
+    [ "-nic", "tap," ++
+        opts [ ("mac", showMAC mac)
+             , ("model",   model)
+             , ("ifname", ifname)
+             , ("script", "no")
+             , ("downscript", "no")
+             ]
     ]
 
 userNet model vlan adopts =
-  [ "-net", "nic," ++ opts [ ("vlan",  show vlan)
-                           , ("model", model)
-                           ]
-  , "-net", "user," ++ opts (("vlan", show vlan):adopts)
+  [ "-nic", "user," ++ opts (("model", model) : adopts)
   ]
 
 opts = intercalate "," . map (\(k,v) -> k++"="++v)
