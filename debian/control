@@ -1,5 +1,5 @@
 Source: kvm-in-a-box
-Maintainer: Daniel Gröber <dxld@darkboxed.org>
+Maintainer: Daniel Gröber <deb@dxld.at>
 Priority: optional
 Section: haskell
 Build-Depends: debhelper (>= 9),
