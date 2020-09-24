@@ -1,3 +1,9 @@
+kvm-in-a-box (15) buster; urgency=medium
+
+  * Fix broken DNS firewall config
+
+ -- Daniel Gröber <deb@dxld.at>  Thu, 24 Sep 2020 09:42:32 +0200
+
 kvm-in-a-box (14) buster; urgency=medium
 
   * Remove vendored iproute
