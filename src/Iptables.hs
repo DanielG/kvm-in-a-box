@@ -172,6 +172,7 @@ updateTables ipv Config {..} pubif vms hosts = insertKib . removeKib
   inputs_from_pub :: [(Proto, String)]
   inputs_from_pub = [ (UDP, "67:68")
                     , (UDP, "53")
+                    , (TCP, "53")
                     ]
 
 defaultTables = defaultTables' accept empty
