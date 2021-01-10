@@ -1,3 +1,11 @@
+kvm-in-a-box (16) buster; urgency=medium
+
+  * Add v2-build stuff to gitignore
+  * Add support for hairpin NAT
+  * Add dpkg-source ignore options
+
+ -- Daniel Gröber <dxld@darkboxed.org>  Sun, 10 Jan 2021 10:48:11 +0100
+
 kvm-in-a-box (15) buster; urgency=medium
 
   * Fix broken DNS firewall config
