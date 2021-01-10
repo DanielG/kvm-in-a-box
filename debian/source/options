@@ -1,0 +1,4 @@
+tar-ignore = ".git/*"
+tar-ignore = "dist/*"
+tar-ignore = "dist-newstyle/*"
+
