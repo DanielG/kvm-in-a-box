@@ -129,8 +129,16 @@ updateTables ipv Config {..} pubif vms hosts = insertKib . removeKib
   insertKibChains :: IptablesSave [ISRule] -> IptablesSave [ISRule]
   insertKibChains = case ipv of
     IPvv4 -> flip replaceOrInsertChain $ [
-        ("nat",    [ ("KIB_PREROUTING", prerouting_chain "KIB_PREROUTING")
-                   , ("KIB_POSTROUTING", [[ "-A", "KIB_POSTROUTING", "-s", "10.0.0.0/16", "-o", cInterface, "-j", "MASQUERADE" ]])
+        ("nat",    [ ("KIB_PREROUTING",
+                      [ [ "-A", "KIB_PREROUTING"
+                        , "-m", "addrtype", "!", "--dst-type", "LOCAL"
+                        , "-j", "RETURN"
+                        ]
+                      ] ++ dnat_rules "KIB_PREROUTING")
+                   , ("KIB_POSTROUTING",
+                       [ [ "-A", "KIB_POSTROUTING", "-o", cInterface, "-s", "10.0.0.0/16", "-j", "MASQUERADE" ]
+                       , [ "-A", "KIB_POSTROUTING", "-o", unIface pubif, "-s", "10.0.0.0/16", "-j", "SNAT", "--to-source", "10.0.0.1" ]
+                       ])
                    ]),
         ("filter", [ ("KIB_FORWARD", forwards_chain "KIB_FORWARD")
                    , ("KIB_INPUT", input_chain "KIB_INPUT")
@@ -140,13 +148,14 @@ updateTables ipv Config {..} pubif vms hosts = insertKib . removeKib
         ("filter", [("KIB_FORWARD", forwards_chain "KIB_FORWARD")])
       ]
 
-  prerouting_chain :: String -> [ISRule]
-  prerouting_chain chain = flip concatMap vms $ \Vm { vNetCfg = VmNetCfg {..}, .. } ->
-    flip map vForwardedPorts4 $ \(unProto -> proto, (iport,eport)) -> let
-        Just ip = snd <$> Map.lookup vName hosts
-      in
-        [ "-A", chain, "-i", cInterface, "-p", proto, "-m", proto, "--dport", show eport
-        , "-j", "DNAT", "--to-destination", showIP ip ++ ":" ++ show iport ]
+  dnat_rules :: String -> [ISRule]
+  dnat_rules chain =
+    flip concatMap vms $ \Vm { vNetCfg = VmNetCfg {..}, .. } ->
+    flip map vForwardedPorts4 $ \(unProto -> proto, (iport,eport)) ->
+    let Just ip = snd <$> Map.lookup vName hosts in
+    [ "-A", chain
+    , "-p", proto, "-m", proto, "--dport", show eport
+    , "-j", "DNAT", "--to-destination", showIP ip ++ ":" ++ show iport ]
 
   forwards_chain :: String -> [ISRule]
   forwards_chain chain = flip map forwards $ \(inif, outif) ->
