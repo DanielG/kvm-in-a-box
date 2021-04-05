@@ -141,11 +141,13 @@ updateTables ipv Config {..} pubif vms hosts = insertKib . removeKib
                        ])
                    ]),
         ("filter", [ ("KIB_FORWARD", forwards_chain "KIB_FORWARD")
-                   , ("KIB_INPUT", input_chain "KIB_INPUT")
+                   , ("KIB_INPUT", input_chain "KIB_INPUT" allowed_from_pub_v4)
                    ])
       ]
     IPvv6 -> flip replaceOrInsertChain $ [
-        ("filter", [("KIB_FORWARD", forwards_chain "KIB_FORWARD")])
+        ("filter", [ ("KIB_FORWARD", forwards_chain "KIB_FORWARD")
+                   , ("KIB_INPUT", input_chain "KIB_INPUT" allowed_from_pub_v6)
+                   ])
       ]
 
   dnat_rules :: String -> [ISRule]
@@ -166,8 +168,9 @@ updateTables ipv Config {..} pubif vms hosts = insertKib . removeKib
              , (unIface pubif, cInterface)
              ]
 
-  input_chain :: String -> [ISRule]
-  input_chain chain = zipWith (input_rule chain) (repeat (unIface pubif)) inputs_from_pub
+  input_chain :: String -> [(Proto, String)] -> [ISRule]
+  input_chain chain allowed_ports =
+      zipWith (input_rule chain) (repeat (unIface pubif)) allowed_ports
 
   input_rule chain iface (unProto -> proto, port) =
     [ "-A", chain
@@ -177,12 +180,20 @@ updateTables ipv Config {..} pubif vms hosts = insertKib . removeKib
     , "-j", "ACCEPT"
     ]
 
-  -- allow dns and DHCP
-  inputs_from_pub :: [(Proto, String)]
-  inputs_from_pub = [ (UDP, "67:68")
-                    , (UDP, "53")
-                    , (TCP, "53")
-                    ]
+  allowed_from_pub_v4, allowed_from_pub_v6 :: [(Proto, String)]
+
+  -- allow DNS
+  allowed_from_pub_v6 =
+      [ (UDP, "53")
+      , (TCP, "53")
+      ]
+
+  -- allow DNS and DHCP
+  allowed_from_pub_v4 =
+      [ (UDP, "67:68")
+      , (UDP, "53")
+      , (TCP, "53")
+      ]
 
 defaultTables = defaultTables' accept empty
  where
