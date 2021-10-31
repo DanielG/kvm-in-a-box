@@ -13,6 +13,7 @@ import Control.DeepSeq
 import Control.Arrow
 
 import BitUtils
+import MAC
 
 -- | CIDR prefix
 type Prefix = Int
@@ -58,3 +59,14 @@ isProper :: IPv4 -> IPv4 -> Bool
 isProper hostmask ip = let
     hostid = ip `masked` hostmask
   in hostid /= (readIP "0.0.0.0") && hostid /= hostmask
+
+addrMaskHost :: Addr a => Address a -> Address a
+addrMaskHost (ip, prefixBits) =
+    (ip `masked` (intToMask prefixBits), prefixBits)
+
+buildEUI64 :: IPv6 -> MAC -> IPv6
+buildEUI64 ip mac =
+    let (a,b,_,_) = toHostAddress6 ip
+        (c,d) = toModifiedEUI64 mac
+        in
+    fromHostAddress6 (a, b, c, d)

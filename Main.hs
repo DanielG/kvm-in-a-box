@@ -53,6 +53,7 @@ import Log
 import Sysctl
 import Iptables
 import SystemdDBus
+import MapJoin
 
 list :: Config -> Options -> State -> IO State
 list cfg opts s@State {..} = do
@@ -210,11 +211,12 @@ resources cfg@Config {..} Options {..} kibGrp hosts vms = do
  where
    vmns = Map.keys vms
 
-   filterVMNs p = map vName $ filter p $ Map.elems vms
+   filterVMs p = Map.filter p vms
+   vmHost vms = Map.toList $ Map.fromList hosts `leftSemiJoin` vms
 
-   pubVms   = filterVMNs (vPublicIf . vNetCfg)
-   privVms  = filterVMNs (vPrivateIf . vNetCfg)
-   groupVms = filterVMNs (not . Set.null . vGroupIfs . vNetCfg)
+   pubVms   = filterVMs (vPublicIf . vNetCfg)
+   privVms  = filterVMs (vPrivateIf . vNetCfg)
+   groupVms = filterVMs (not . Set.null . vGroupIfs . vNetCfg)
 
    caddr = cAddress
    caddr6 = cAddress6
@@ -222,12 +224,12 @@ resources cfg@Config {..} Options {..} kibGrp hosts vms = do
    -- cgrp6 = cGroup6
 
    pubIfR amRoot =
-    interfaceResource (mkIface "kpu") (Just caddr) caddr6 pubVms amRoot
+    interfaceResource (mkIface "kpu") (Just caddr) caddr6 (vmHost pubVms) amRoot
 
    privIfR amRoot =
     -- priv interface doesn't get an IPv4 address since that would be silly
     -- complicated
-    interfaceResource (mkIface "kpr") Nothing cpriv6 privVms amRoot
+    interfaceResource (mkIface "kpr") Nothing cpriv6 (vmHost privVms) amRoot
 
    passwdR grp =
        passwdResource (Map.keys vms) grp

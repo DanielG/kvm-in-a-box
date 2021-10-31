@@ -1,4 +1,4 @@
-module MAC (MAC, enumerateMACs, showMAC, readMAC, nullMAC) where
+module MAC (MAC, enumerateMACs, showMAC, readMAC, nullMAC, toModifiedEUI64) where
 
 import GHC.Generics
 import Control.DeepSeq
@@ -41,3 +41,16 @@ readMAC :: String -> MAC
 readMAC str = MAC $ map (unHex . readNote "readMAC") $ splitOn ":" str
 
 nullMAC = readMAC "02:00:00:00:00:00"
+
+toModifiedEUI64 :: MAC -> (Word32, Word32)
+toModifiedEUI64 (MAC (map fromIntegral -> [a,b,c, d,e,f])) =
+    let a' = a `xor` 0x80 in
+    ( (a' `shift` 24) .|.
+      (b  `shift` 16) .|.
+      (c  `shift`  8) .|.
+      0xff
+    , (d  `shift` 24) .|.
+      (e  `shift` 16) .|.
+      (f  `shift`  8) .|.
+      0xff
+    )

@@ -33,7 +33,9 @@ vmDnsDhcpResource bridges cfg =
                  , "enable-ra"
                  , "dhcp-range="++(showIP $ fst $ cAddress cfg)++",static"
                  ] ++
-                 ((\(unIface -> ifn) -> "dhcp-range=::,constructor:"++ifn++",slaac,ra-names") `map` bridges)
+                 ((\(unIface -> ifn) ->
+                       "dhcp-range=::,constructor:"++ifn
+                    ++",slaac,ra-names,off-link") `map` bridges)
  }
 
 vmHostLeaseResource :: Address IPv4 -> [VmName] -> SomeResource

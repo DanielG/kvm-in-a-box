@@ -19,24 +19,17 @@ import Resource
 import Utils
 import Files
 import IP
+import MAC
 
-interfaceResource :: Interface -> Maybe (Address IPv4) -> Address IPv6 -> [VmName] -> Bool -> ManyResources
-interfaceResource br@(unIface -> brn) maddr addr6 [] amRoot =
-    ManyResources $ return $ SomeResource $ SimpleFileResource {
-      sfrPath = etcdir </> "network/interfaces.d/"++brn,
-      sfrPerms = ((Nothing, Nothing), Just "644"),
-      sfrNormalize = id,
-      sfrContent = "",
-      sfrOwner = OwnerKib
-    }
+interfaceResource :: Interface -> Maybe (Address IPv4) -> Address IPv6 -> [(VmName, (MAC, IPv4))] -> Bool -> ManyResources
 interfaceResource br@(unIface -> brn) maddr addr6 vms amRoot = ManyResources $ [
     SomeResource $ SimpleFileResource {
       sfrPath = etcdir </> "network/interfaces.d/"++brn,
       sfrPerms = ((Nothing, Nothing), Just "644"),
       sfrNormalize = unlines . concatMap ifupdownNormalize . lines,
-      sfrContent = brdef brn addr6 vms $ fromMaybe [] $ net <$> maddr,
+      sfrContent = brdef br addr6 vms $ fromMaybe [] $ net <$> maddr,
       sfrOwner = OwnerKib
-    } ] ++ if amRoot then map ifaceRes vms else []
+    } ] ++ if amRoot then map (ifaceRes . fst) vms else []
 
  where
    ifpf v = brn ++ "-" ++ v
@@ -68,23 +61,27 @@ interfaceResource br@(unIface -> brn) maddr addr6 vms amRoot = ManyResources $ [
       }
     where
       i = mkIface $ ifpf vm
-      usr = usrpf vm
+      usr = kibVmUser vm
 
 net (ip, prefix) = [
   "address        " ++ showIP ip,
   "netmask        " ++ show prefix
  ]
 
-brdef brn addr6 vms lines = iface brn $
- br_ports ++ [
+brdef br@(unIface -> brn) addr6 vms lines = iface brn $ [
+  "bridge_ports   none",
   "bridge_stp     off",
   "bridge_maxwait 0",
-  "bridge_fd      0"
- ] ++ lines ++ concatMap (downstreamIface (mkIface brn) (mkIface . ifpf) addr6) vms
- where
-   ifpf v = brn ++ "-" ++ v
-   br_ports | not $ null vms = [("bridge_ports   " ++ unwords (map ifpf vms))]
-            | otherwise = []
+  "bridge_fd      0",
+
+  "up " ++ unwords (modIpv6 "add" br addr6),
+  "down " ++ unwords (modIpv6 "del" br addr6),
+
+  "up " ++ unwords ["sysctl", "-w", "net.ipv4.conf.$IFACE.proxy_arp_pvlan=1" ],
+  "up " ++ unwords ["sysctl", "-w", "net.ipv4.conf.$IFACE.send_redirects=0" ],
+  "up " ++ unwords ["sysctl", "-w", "net.ipv4.conf.$IFACE.accept_redirects=0" ],
+  "up " ++ unwords ["sysctl", "-w", "net.ipv6.conf.$IFACE.accept_redirects=0" ]
+ ] ++ lines ++ concatMap (downstreamIface brn addr6) vms
 
 iface name lines = unlines $ [
   "auto "++name,
@@ -93,18 +90,32 @@ iface name lines = unlines $ [
   -- dhcp server themselves
  ] ++ map ("  " ++) lines
 
-downstreamIface brn ifpf addr6 vm = [
-  "pre-up " ++ unwords (tapAdd (ifpf vm) (usrpf vm)),
-  "pre-up " ++ unwords (setIfstate (ifpf vm) (IfState "up")),
-  "up " ++ unwords (modIpv6 "add" brn addr6),
--- TODO: set static arp entry and filter everything else using arptables
---  "pre-up" ++ unwords (arp (ifpf vm) mac),
-  "down " ++ unwords (modIpv6 "del" brn addr6),
-  "post-down " ++ unwords (setIfstate (ifpf vm) (IfState "down")),
-  "post-down " ++ unwords (tapDel (ifpf vm))
- ]
+downstreamIface brn (ipv6, pfx) (vmn, (mac, showIP -> ipv4)) = let
+    ifn = brn ++ "-" ++ vmn
+    ifa = mkIface ifn
+    ipv6_ll   = showIP6 $ buildEUI64 (read "fe80::") mac
+    ipv6_auto = showIP6 $ buildEUI64 ipv6 mac
+  in [
+  "up " ++ unwords (tapAdd ifa (kibVmUser vmn)),
+  "down " ++ unwords (tapDel ifa),
 
-usrpf u = "kib-" ++ u
+  "up    ip link set dev "++ifn++" master $IFACE",
+  "down  ip link set dev "++ifn++" nomaster",
+
+  "up    bridge link set dev "++ifn++" isolated on learning off flood off mcast_flood off",
+  "up    bridge fdb add "++showMAC mac++" dev "++ifn++" master static",
+  "up    ip neigh add "++ipv4++" lladdr "++showMAC mac++" dev $IFACE nud permanent",
+  "up    ip neigh add "++ipv6_ll++" lladdr "++showMAC mac++" dev $IFACE nud permanent",
+  "up    ip neigh add "++ipv6_auto++" lladdr "++showMAC mac++" dev $IFACE nud permanent",
+
+  "up " ++ unwords (setIfstate ifa (IfState "up")),
+  "down " ++ unwords (setIfstate ifa (IfState "down"))
+ ]
+ where
+    ifpf v = brn ++ "-" ++ v
+
+
+kibVmUser u = "kib-" ++ u
 
 data IfState = IfState String deriving (Eq, Show)
 type ShCommand = [String]
@@ -143,8 +154,8 @@ brIfaces (unIface -> br) =
   map mkIface . filter (not . (`elem` [".", ".."]))
     <$> getDirectoryContents ("/sys/class/net/" </> br </> "brif")
 
-brAddIf (unIface -> br) (unIface -> brn) =
-  ["brctl", "addif", br, brn]
+brAddIf (unIface -> brn) (unIface -> port) =
+  ["ip", "link", "set", "dev", port, "master", brn]
 
 ifupdownNormalize :: String -> [String]
 ifupdownNormalize ('#':l) = []

@@ -126,6 +126,9 @@ updateTables ipv Config {..} pubif vms hosts = insertKib . removeKib
   --     jumpRule c = ("KIB_" ++ c, [])
   --     jumpPolicy c = ("KIB_" ++ c, Just $ ISP Nothing 0 0)
 
+  host4IP = showIP $ fst $ cAddress
+  subnet4Mask = showIPRange $ addrMaskHost cAddress
+
   insertKibChains :: IptablesSave [ISRule] -> IptablesSave [ISRule]
   insertKibChains = case ipv of
     IPvv4 -> flip replaceOrInsertChain $ [
@@ -133,11 +136,16 @@ updateTables ipv Config {..} pubif vms hosts = insertKib . removeKib
                       [ [ "-A", "KIB_PREROUTING"
                         , "-m", "addrtype", "!", "--dst-type", "LOCAL"
                         , "-j", "RETURN"
+                        ],
+                        [ "-A", "KIB_PREROUTING"
+                        , "-d", host4IP
+                        , "-j", "RETURN"
                         ]
                       ] ++ dnat_rules "KIB_PREROUTING")
                    , ("KIB_POSTROUTING",
-                       [ [ "-A", "KIB_POSTROUTING", "-o", cInterface, "-s", "10.0.0.0/16", "-j", "MASQUERADE" ]
-                       , [ "-A", "KIB_POSTROUTING", "-o", unIface pubif, "-s", "10.0.0.0/16", "-j", "SNAT", "--to-source", "10.0.0.1" ]
+                       [ [ "-A", "KIB_POSTROUTING", "-o", cInterface
+                         , "-s", subnet4Mask
+                         , "-j", "MASQUERADE" ]
                        ])
                    ]),
         ("filter", [ ("KIB_FORWARD", forwards_chain "KIB_FORWARD")
@@ -147,6 +155,11 @@ updateTables ipv Config {..} pubif vms hosts = insertKib . removeKib
     IPvv6 -> flip replaceOrInsertChain $ [
         ("filter", [ ("KIB_FORWARD", forwards_chain "KIB_FORWARD")
                    , ("KIB_INPUT", input_chain "KIB_INPUT" allowed_from_pub_v6)
+                   , ("KIB_OUTPUT",
+                      [ [ "-A", "OUTPUT", "-o", unIface pubif,
+                          "-p", "icmpv6", "--icmpv6-type", "redirect",
+                          "-j", "DROP" ]
+                      ])
                    ])
       ]
 
