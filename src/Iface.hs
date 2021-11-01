@@ -103,10 +103,10 @@ downstreamIface brn (ipv6, pfx) (vmn, (mac, showIP -> ipv4)) = let
   "down  ip link set dev "++ifn++" nomaster",
 
   "up    bridge link set dev "++ifn++" isolated on learning off flood off mcast_flood off",
-  "up    bridge fdb add "++showMAC mac++" dev "++ifn++" master static",
-  "up    ip neigh add "++ipv4++" lladdr "++showMAC mac++" dev $IFACE nud permanent",
-  "up    ip neigh add "++ipv6_ll++" lladdr "++showMAC mac++" dev $IFACE nud permanent",
-  "up    ip neigh add "++ipv6_auto++" lladdr "++showMAC mac++" dev $IFACE nud permanent",
+  "up    bridge fdb replace "++showMAC mac++" dev "++ifn++" master static",
+  "up    ip neigh replace "++ipv4++" lladdr "++showMAC mac++" dev $IFACE nud permanent",
+  "up    ip neigh replace "++ipv6_ll++" lladdr "++showMAC mac++" dev $IFACE nud permanent",
+  "up    ip neigh replace "++ipv6_auto++" lladdr "++showMAC mac++" dev $IFACE nud permanent",
 
   "up " ++ unwords (setIfstate ifa (IfState "up")),
   "down " ++ unwords (setIfstate ifa (IfState "down"))
