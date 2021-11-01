@@ -1,3 +1,12 @@
+kvm-in-a-box (21) buster; urgency=medium
+
+  * Add MIT license header to vendored Data.SConfig
+  * Replace hardcoded hypervisor ssh key with config option
+  * Reduce gtfobin risk posed by systemctl's use of less
+  * preseed: Dismiss lowmem warning
+
+ -- Daniel Gröber <dxld@darkboxed.org>  Mon, 01 Nov 2021 22:29:09 +0100
+
 kvm-in-a-box (20) buster; urgency=medium
 
   * Fix hairpin-hairpin NAT
