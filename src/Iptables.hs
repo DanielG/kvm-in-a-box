@@ -143,10 +143,10 @@ updateTables ipv Config {..} pubif vms hosts = insertKib . removeKib
                         ]
                       ] ++ dnat_rules "KIB_PREROUTING")
                    , ("KIB_POSTROUTING",
-                       [ [ "-A", "KIB_POSTROUTING", "-o", cInterface
-                         , "-s", subnet4Mask
-                         , "-j", "MASQUERADE" ]
-                       ])
+                      [ [ "-A", "KIB_POSTROUTING", "-o", cInterface
+                        , "-s", subnet4Mask
+                        , "-j", "MASQUERADE" ]
+                      ] ++ snat_rules "KIB_POSTROUTING")
                    ]),
         ("filter", [ ("KIB_FORWARD", forwards_chain "KIB_FORWARD")
                    , ("KIB_INPUT", input_chain "KIB_INPUT" allowed_from_pub_v4)
@@ -170,7 +170,16 @@ updateTables ipv Config {..} pubif vms hosts = insertKib . removeKib
     let Just ip = snd <$> Map.lookup vName hosts in
     [ "-A", chain
     , "-p", proto, "-m", proto, "--dport", show eport
+    , "!", "-d", showIP ip
     , "-j", "DNAT", "--to-destination", showIP ip ++ ":" ++ show iport ]
+
+  snat_rules :: String -> [ISRule]
+  snat_rules chain =
+    flip map vms $ \Vm { vNetCfg = VmNetCfg {..}, .. } ->
+    let Just ip = snd <$> Map.lookup vName hosts in
+    [ "-A", chain
+    , "-s", showIP ip, "-d", showIP ip
+    , "-j", "SNAT", "--to-source", host4IP ]
 
   forwards_chain :: String -> [ISRule]
   forwards_chain chain = flip map forwards $ \(inif, outif) ->
