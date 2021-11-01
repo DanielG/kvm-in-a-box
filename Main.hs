@@ -564,6 +564,9 @@ main = do
       putStrLn "  > kill-install"
       putStrLn ""
 
+      setEnv "PAGER" "cat"
+      setEnv "SYSTEMD_PAGER" "cat"
+
       adminConsole =<< getLoginName
 
     x | x == "kib-install" || x == "-kib-install"  -> do
