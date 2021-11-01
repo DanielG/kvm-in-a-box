@@ -1,3 +1,9 @@
+kvm-in-a-box (19) buster; urgency=medium
+
+  * Fix fdb/neigh entry race condition
+
+ -- Daniel Gröber <dxld@darkboxed.org>  Mon, 01 Nov 2021 06:42:55 +0100
+
 kvm-in-a-box (18) buster; urgency=medium
 
   * Relax bound for bullseye
