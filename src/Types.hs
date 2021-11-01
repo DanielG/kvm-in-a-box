@@ -34,7 +34,8 @@ data Config = Config {
       cAddress6  :: Address IPv6,
       cPrivate6  :: Address IPv6,
       cGroup6    :: Address IPv6,
-      cDefaultVg :: Maybe String
+      cDefaultVg :: Maybe String,
+      cSshKey    :: Maybe String
     } deriving Show
 
 type VmName = String

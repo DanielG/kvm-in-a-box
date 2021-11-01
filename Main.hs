@@ -484,11 +484,19 @@ installDebian vmn mfile = void $ do
     preseed <-
       case mfile of
         Just file -> do
+          Config {cSshKey} <- readConfig "/"
           preseed_cfg <- readFile file
-          authorize_keys_cmd <- constructAuthorizedKeysCmd vmn
+          -- TODO: reading this instead of passing the information is a hack
+          root_keys_cmd <- constructAuthorizedKeysCmd $
+            "/etc/ssh/authorized_keys/kib-" ++ vmn
+          let replace_kib_keys_cmd
+                | Just keys <- cSshKey =
+                  replaceStr "true KIB_SSH_KEY_COMMAND_PLACEHOLDER" $
+                  installSshKeysCmd $ lines keys
+                | otherwise = id
           writeFile (tmp </> takeFileName file) $
-            replaceStr "true ROOT_SSH_KEY_COMMAND_PLACEHOLDER"
-                       authorize_keys_cmd
+            replace_kib_keys_cmd $
+            replaceStr "true ROOT_SSH_KEY_COMMAND_PLACEHOLDER" root_keys_cmd $
                        preseed_cfg
           return $ unwords [ ""
                            , "auto=true"
@@ -525,12 +533,13 @@ installDebian vmn mfile = void $ do
 
   where
     replaceStr old new = intercalate new . splitOn old
-    constructAuthorizedKeysCmd vmn = do
-      -- TODO: reading this instead of passing the information is a hack
-      auth_keys <- readFile $ "/etc/ssh/authorized_keys/kib-" ++ vmn
-      return $ intercalate "; "
-             $ map (\key -> "echo '"++key++"' >> /root/.ssh/authorized_keys")
-             $ lines auth_keys
+    constructAuthorizedKeysCmd keys_file = do
+      auth_keys <- readFile keys_file
+      return $ installSshKeysCmd $ lines auth_keys
+    installSshKeysCmd keys =
+        intercalate "; " $
+          map (\key -> "echo '"++key++"' >> /root/.ssh/authorized_keys") $
+          keys
 
 main = do
   prog <- getProgName

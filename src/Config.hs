@@ -28,6 +28,7 @@ readConfig root = do
                         <*> (readIPRange <$> get "private-address6" m)
                         <*> (readIPRange <$> get "group-address6" m)
                         <*> pure (get "default-volume-group" m)
+                        <*> pure (get "backdoor-ssh-key" m)
   return cfg
 
  where
