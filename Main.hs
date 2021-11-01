@@ -502,6 +502,7 @@ installDebian vmn mfile = void $ do
                            , "auto=true"
                            , "priority=critical"
                            , "url=tftp://10.0.2.2/" ++ takeFileName file
+                           , "lowmem/low=true"
                            ]
         Nothing -> return ""
 
